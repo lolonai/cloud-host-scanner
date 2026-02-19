@@ -220,30 +220,54 @@ class CloudScanner:
 
 
 def get_ip_ranges_for_country(country_code: str) -> List[str]:
-    """
-    Récupère les ranges d'IPs pour un pays via l'API RIPE.
-    Retourne une liste d'IPs à scanner.
-    """
-    # Pour le MVP, on génère des IPs de test
-    # TODO: Intégrer vraie API RIPE/ipinfo.io
+    """Récupère les ranges d'IPs pour un pays via ipinfo.io."""
+    if not IPINFO_TOKEN:
+        print("❌ IPINFO_TOKEN manquant")
+        return []
 
-    # Ranges de test (à remplacer par vraie data)
-    test_ranges = {
-        "FR": ["51.15.", "163.172.", "195.154."],  # OVH, Scaleway
-        "BE": ["193.191.", "194.78."],
-        "US": ["54.144.", "52.2."],  # AWS
-        "GB": ["51.105.", "20.50."],  # Azure UK
-    }
+    try:
+        # Utiliser l'API ranges de ipinfo.io
+        resp = requests.get(
+            f"https://ipinfo.io/data/ranges/{country_code.lower()}.json",
+            params={"token": IPINFO_TOKEN},
+            timeout=10
+        )
 
-    base_ranges = test_ranges.get(country_code, ["8.8.8."])
+        if resp.status_code != 200:
+            print(f"❌ Erreur ipinfo.io: {resp.status_code} - {resp.text}")
+            return []
 
-    # Générer des IPs de test
-    ips = []
-    for base in base_ranges[:1]:  # Limiter pour le test
-        for i in range(1, 255, 10):  # Échantillon
-            ips.append(f"{base}{i}")
+        data = resp.json()
 
-    return ips
+        # Générer des IPs à partir des ranges
+        ips = []
+        for entry in data[:50]:  # Limiter à 50 premiers ranges
+            cidr = entry.get("range", "")
+            if not cidr:
+                continue
+
+            try:
+                network = ipaddress.ip_network(cidr, strict=False)
+                # Échantillonner 10 IPs par range
+                hosts = list(network.hosts())
+                if len(hosts) > 10:
+                    step = len(hosts) // 10
+                    sample = [str(hosts[i]) for i in range(0, len(hosts), step)][:10]
+                else:
+                    sample = [str(h) for h in hosts[:10]]
+                ips.extend(sample)
+
+                if len(ips) >= 500:
+                    break
+            except:
+                continue
+
+        print(f"📡 {len(ips)} IPs générées")
+        return ips[:500]
+
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
+        return []
 
 
 def main():
