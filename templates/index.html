@@ -53,6 +53,85 @@
       font-size: 14px;
     }
     
+    .scan-controls {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      margin-top: 20px;
+    }
+    
+    .btn-scan {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-scan:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+    
+    .btn-scan:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .scan-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    
+    .spinner-inline {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    .logs-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: "Monaco", "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      display: none;
+    }
+    
+    .logs-container.active {
+      display: block;
+    }
+    
+    .log-line {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    
+    .log-line:last-child {
+      border-bottom: none;
+    }
+    
+    .log-success { color: var(--success); }
+    .log-error { color: var(--warning); }
+    .log-info { color: var(--accent); }
+    
+    
     /* Stats */
     .stats {
       display: grid;
@@ -317,7 +396,32 @@
     <header>
       <h1>☁️ Cloud Host Scanner</h1>
       <p class="subtitle">Détection multi-providers : Heroku, AWS, GCP, Azure, et plus...</p>
+      
+      <div class="scan-controls">
+        <select id="scanCountry" style="width: 200px;">
+          <option value="FR">🇫🇷 France</option>
+          <option value="BE">🇧🇪 Belgique</option>
+          <option value="CH">🇨🇭 Suisse</option>
+          <option value="GB">🇬🇧 Royaume-Uni</option>
+          <option value="DE">🇩🇪 Allemagne</option>
+          <option value="ES">🇪🇸 Espagne</option>
+          <option value="IT">🇮🇹 Italie</option>
+          <option value="US">🇺🇸 États-Unis</option>
+          <option value="CA">🇨🇦 Canada</option>
+        </select>
+        
+        <button class="btn-scan" onclick="startScan()" id="scanBtn">
+          🚀 Lancer un scan
+        </button>
+        
+        <div class="scan-status" id="scanStatus" style="display: none;">
+          <div class="spinner-inline"></div>
+          <span id="scanStatusText">Scan en cours...</span>
+        </div>
+      </div>
     </header>
+    
+    <div class="logs-container" id="logsContainer"></div>
     
     <div class="stats" id="stats">
       <div class="stat-card">
@@ -398,6 +502,87 @@
     const PROVIDERS = {{ providers | tojson }};
     const COUNTRIES = {{ countries | tojson }};
     let currentPage = 1;
+    let scanInterval = null;
+    
+    // ── Start scan ────────────────────────────────────────────
+    async function startScan() {
+      const country = document.getElementById('scanCountry').value;
+      const btn = document.getElementById('scanBtn');
+      const status = document.getElementById('scanStatus');
+      const logsContainer = document.getElementById('logsContainer');
+      
+      // UI updates
+      btn.disabled = true;
+      status.style.display = 'flex';
+      logsContainer.classList.add('active');
+      logsContainer.innerHTML = '<div class="log-line log-info">🚀 Démarrage du scan...</div>';
+      
+      try {
+        const resp = await fetch(`/api/trigger-scan?country=${country}`);
+        const data = await resp.json();
+        
+        addLog(`✅ Scan lancé pour ${country}`, 'success');
+        
+        // Poll logs every 2 seconds
+        scanInterval = setInterval(pollLogs, 2000);
+        
+        // Poll until done
+        setTimeout(checkScanComplete, 5000);
+        
+      } catch (err) {
+        addLog(`❌ Erreur: ${err.message}`, 'error');
+        btn.disabled = false;
+        status.style.display = 'none';
+      }
+    }
+    
+    function addLog(message, type = 'info') {
+      const logsContainer = document.getElementById('logsContainer');
+      const logLine = document.createElement('div');
+      logLine.className = `log-line log-${type}`;
+      logLine.textContent = message;
+      logsContainer.appendChild(logLine);
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+    
+    async function pollLogs() {
+      // TODO: implement actual log streaming if needed
+      // For now, just refresh stats
+      loadStats();
+    }
+    
+    async function checkScanComplete() {
+      // Check if scan is done by looking at stats changes
+      const resp = await fetch('/api/stats');
+      if (resp.ok) {
+        loadHosts();
+        loadStats();
+      }
+      
+      // Keep checking every 10s for 5 minutes max
+      if (scanInterval && performance.now() < 300000) {
+        setTimeout(checkScanComplete, 10000);
+      } else {
+        stopScan();
+      }
+    }
+    
+    function stopScan() {
+      const btn = document.getElementById('scanBtn');
+      const status = document.getElementById('scanStatus');
+      
+      btn.disabled = false;
+      status.style.display = 'none';
+      
+      if (scanInterval) {
+        clearInterval(scanInterval);
+        scanInterval = null;
+      }
+      
+      addLog('✅ Scan terminé', 'success');
+      loadHosts();
+      loadStats();
+    }
     
     // ── Load hosts ────────────────────────────────────────────
     async function loadHosts(page = 1) {
