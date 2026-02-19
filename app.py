@@ -267,6 +267,33 @@ def toggle_selection(host_id):
     return jsonify({"selected": result[0] if result else False})
 
 
+@app.route("/api/trigger-scan")
+def trigger_scan():
+    """Déclenche un scan en arrière-plan."""
+    import subprocess
+    import threading
+    
+    def run_scan():
+        """Lance le scanner en subprocess."""
+        try:
+            subprocess.run(
+                ["python3", "scanner.py"],
+                env={
+                    **os.environ,
+                    "SCAN_COUNTRY": request.args.get("country", "FR")
+                },
+                timeout=300  # 5 minutes max
+            )
+        except Exception as e:
+            print(f"❌ Erreur scan: {e}")
+    
+    # Lancer en thread pour ne pas bloquer la requête
+    thread = threading.Thread(target=run_scan, daemon=True)
+    thread.start()
+    
+    return jsonify({"status": "started"}), 200
+
+
 @app.route("/api/export")
 def export_csv():
     """Exporte les hosts sélectionnés en CSV."""
