@@ -1,734 +1,1175 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Host Scanner - Multi-Provider Detection</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloud Scanner — GitHub Companies Worldwide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
+    /* ─── Variables ─────────────────────────────────── */
     :root {
-      --bg: #0f1419;
-      --surface: #1a1f2e;
-      --border: #2d3748;
-      --text: #e2e8f0;
-      --muted: #a0aec0;
-      --accent: #667eea;
-      --success: #48bb78;
-      --warning: #ed8936;
+      --bg:       #f5f6fa;
+      --surface:  #ffffff;
+      --border:   #e2e4ed;
+      --accent:   #5b3ef5;
+      --accent2:  #f03e6e;
+      --green:    #00a870;
+      --yellow:   #d4900a;
+      --text:     #1a1a2e;
+      --muted:    #7c7c9a;
+      --mono:     'Space Mono', monospace;
+      --sans:     'Syne', sans-serif;
     }
-    
+
+    /* ─── Reset ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--sans);
       background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
     }
-    
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px;
+
+    /* ─── Grain overlay ─────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 9999; opacity: 0.35;
     }
-    
-    /* Header */
+
+    /* ─── Layout ─────────────────────────────────────── */
+    .app { max-width: 1200px; margin: 0 auto; padding: 0 24px 80px; }
+
+    /* ─── Header ─────────────────────────────────────── */
     header {
-      background: var(--surface);
-      padding: 30px;
-      border-radius: 12px;
-      margin-bottom: 30px;
-      border: 1px solid var(--border);
+      padding: 48px 0 40px;
+      display: flex; align-items: flex-start; gap: 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+      position: relative;
     }
-    
-    h1 {
-      font-size: 32px;
-      margin-bottom: 10px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    .logo-badge {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+      box-shadow: 0 0 30px rgba(91,62,245,0.2);
     }
-    
-    .subtitle {
-      color: var(--muted);
-      font-size: 14px;
+    .header-text h1 {
+      font-size: clamp(22px, 4vw, 32px);
+      font-weight: 800; letter-spacing: -0.03em;
+      line-height: 1.1;
     }
-    
-    .scan-controls {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-      margin-top: 20px;
+    .header-text h1 span { color: var(--accent); }
+    .header-text p {
+      color: var(--muted); font-size: 14px;
+      margin-top: 6px; font-family: var(--mono);
     }
-    
-    .btn-scan {
-      padding: 12px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
+    .pill {
+      position: absolute; top: 48px; right: 0;
+      background: rgba(91,62,245,0.08);
+      border: 1px solid rgba(91,62,245,0.2);
+      color: var(--accent); border-radius: 100px;
+      padding: 4px 12px; font-size: 11px;
+      font-family: var(--mono); letter-spacing: 0.05em;
+      text-transform: uppercase;
     }
-    
-    .btn-scan:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-    }
-    
-    .btn-scan:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-    
-    .scan-status {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-    
-    .spinner-inline {
-      width: 16px;
-      height: 16px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    
-    .logs-container {
+
+    /* ─── Grid Layout ────────────────────────────────── */
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 24px; align-items: start; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ─── Card ───────────────────────────────────────── */
+    .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
-      max-height: 400px;
-      overflow-y: auto;
-      font-family: "Monaco", "Courier New", monospace;
-      font-size: 13px;
-      line-height: 1.8;
-      display: none;
-    }
-    
-    .logs-container.active {
-      display: block;
-    }
-    
-    .log-line {
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    
-    .log-line:last-child {
-      border-bottom: none;
-    }
-    
-    .log-success { color: var(--success); }
-    .log-error { color: var(--warning); }
-    .log-info { color: var(--accent); }
-    
-    
-    /* Stats */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 15px;
-      margin-bottom: 30px;
-    }
-    
-    .stat-card {
-      background: var(--surface);
-      padding: 20px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-    }
-    
-    .stat-value {
-      font-size: 32px;
-      font-weight: 700;
-      margin-bottom: 5px;
-    }
-    
-    .stat-label {
-      color: var(--muted);
-      font-size: 13px;
-    }
-    
-    /* Filters */
-    .filters {
-      background: var(--surface);
-      padding: 25px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-      border: 1px solid var(--border);
-    }
-    
-    .filter-row {
-      display: flex;
-      gap: 15px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    
-    .filter-group {
-      flex: 1;
-      min-width: 200px;
-    }
-    
-    .filter-group label {
-      display: block;
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-    
-    select, input[type="checkbox"] {
-      width: 100%;
-      padding: 12px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: 14px;
-      cursor: pointer;
-    }
-    
-    select:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-    
-    /* Buttons */
-    button {
-      padding: 12px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .btn-primary {
-      background: var(--accent);
-      color: white;
-    }
-    
-    .btn-primary:hover {
-      background: #5568d3;
-    }
-    
-    .btn-success {
-      background: var(--success);
-      color: white;
-    }
-    
-    .btn-success:hover {
-      background: #38a169;
-    }
-    
-    /* Table */
-    .table-container {
-      background: var(--surface);
-      border-radius: 12px;
-      border: 1px solid var(--border);
+      border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      padding: 28px;
+      position: relative;
       overflow: hidden;
     }
-    
-    .table-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 20px;
-      border-bottom: 1px solid var(--border);
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(108,71,255,0.5), transparent);
     }
-    
-    .table-title {
-      font-size: 18px;
-      font-weight: 600;
+    .card-title {
+      font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--muted);
+      font-family: var(--mono); margin-bottom: 20px;
     }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
+
+    /* ─── Form ───────────────────────────────────────── */
+    .field { margin-bottom: 18px; }
+    label {
+      display: block; font-size: 12px; color: var(--muted);
+      font-family: var(--mono); margin-bottom: 8px;
+      letter-spacing: 0.05em;
     }
-    
-    thead {
-      background: var(--bg);
-    }
-    
-    th {
-      padding: 15px;
-      text-align: left;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    
-    tbody tr {
-      border-bottom: 1px solid var(--border);
-      transition: background 0.2s;
-    }
-    
-    tbody tr:hover {
-      background: rgba(102, 126, 234, 0.05);
-    }
-    
-    td {
-      padding: 15px;
-      font-size: 14px;
-    }
-    
-    .provider-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-    }
-    
-    .country-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 14px;
-    }
-    
-    .checkbox-cell {
-      text-align: center;
-    }
-    
-    input[type="checkbox"] {
-      width: 20px;
-      height: 20px;
-      cursor: pointer;
-      accent-color: var(--accent);
-    }
-    
-    .domain-link {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 500;
-    }
-    
-    .domain-link:hover {
-      text-decoration: underline;
-    }
-    
-    .ip-text {
-      color: var(--muted);
-      font-family: "Monaco", "Courier New", monospace;
-      font-size: 13px;
-    }
-    
-    /* Pagination */
-    .pagination {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 10px;
-      padding: 20px;
-      border-top: 1px solid var(--border);
-    }
-    
-    .pagination button {
-      padding: 8px 16px;
-      background: var(--bg);
+    input[type="text"], input[type="password"], input[type="number"] {
+      width: 100%; padding: 12px 16px;
+      background: rgba(0,0,0,0.03);
       border: 1px solid var(--border);
-      color: var(--text);
+      border-radius: 10px; color: var(--text);
+      font-family: var(--mono); font-size: 13px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
     }
-    
-    .pagination button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(91,62,245,0.08);
     }
-    
-    .pagination .page-info {
-      color: var(--muted);
-      font-size: 14px;
+    input::placeholder { color: var(--muted); }
+
+    /* Token field avec toggle */
+    .token-wrap { position: relative; }
+    .token-wrap input { padding-right: 44px; }
+    .toggle-pw {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 16px; padding: 0;
+      transition: color 0.2s;
     }
-    
-    /* Empty state */
+    .toggle-pw:hover { color: var(--text); }
+
+    /* Range slider pour max_companies */
+    .range-wrap { display: flex; gap: 12px; align-items: center; }
+    input[type="range"] {
+      flex: 1; -webkit-appearance: none;
+      background: var(--border); height: 4px; border-radius: 4px;
+      outline: none; border: none; padding: 0;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--accent);
+      cursor: pointer; box-shadow: 0 0 8px rgba(91,62,245,0.3);
+    }
+    .range-val {
+      min-width: 42px; text-align: center; font-family: var(--mono);
+      font-size: 14px; font-weight: 700; color: var(--accent);
+    }
+
+    /* Token status indicator */
+    .token-status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-family: var(--mono); margin-top: 8px;
+      height: 18px;
+    }
+    .token-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted); transition: background 0.3s;
+    }
+    .token-dot.valid   { background: var(--green); box-shadow: 0 0 6px rgba(0,229,160,0.5); }
+    .token-dot.invalid { background: var(--accent2); }
+    .token-dot.checking { animation: pulse 1s infinite; background: var(--yellow); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* ─── Button ─────────────────────────────────────── */
+    .btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      border: none; border-radius: 10px;
+      color: #fff; font-family: var(--sans);
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.02em;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .btn:hover:not(:disabled) {
+      opacity: 0.9; transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(91,62,245,0.2);
+    }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.danger {
+      background: linear-gradient(135deg, #cc2a4e, var(--accent2));
+    }
+
+    /* ─── Stats bar ──────────────────────────────────── */
+    .stats-bar {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 12px; margin-bottom: 24px;
+    }
+    .stat-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      text-align: center;
+    }
+    .stat-num {
+      font-family: var(--mono); font-size: 28px; font-weight: 700;
+      color: var(--accent); line-height: 1;
+    }
+    .stat-label {
+      font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-top: 6px; font-family: var(--mono);
+    }
+
+    /* ─── Terminal log ───────────────────────────────── */
+    .terminal {
+      background: #1e1e2e; border: 1px solid #2a2a3e;
+      border-radius: 12px; overflow: hidden; margin-bottom: 24px;
+    }
+    .terminal-bar {
+      padding: 10px 16px; background: #eef0f8;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .t-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .t-dot.r { background: #ff5f56; }
+    .t-dot.y { background: #ffbd2e; }
+    .t-dot.g { background: #27c93f; }
+    .terminal-title {
+      margin-left: 8px; font-family: var(--mono);
+      font-size: 11px; color: var(--muted);
+    }
+    .terminal-body {
+      padding: 16px; height: 260px; overflow-y: auto;
+      font-family: var(--mono); font-size: 12px; line-height: 1.7;
+      color: #8888aa;
+    }
+    .terminal-body::-webkit-scrollbar { width: 4px; }
+    .terminal-body::-webkit-scrollbar-track { background: transparent; }
+    .terminal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .log-line { animation: fadeIn 0.2s ease; }
+    .log-line.green  { color: var(--green); }
+    .log-line.red    { color: var(--accent2); }
+    .log-line.yellow { color: var(--yellow); }
+    .log-line.accent { color: var(--accent); }
+    @keyframes fadeIn { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:none} }
+
+    /* ─── Progress bar ───────────────────────────────── */
+    .progress-wrap { margin-bottom: 24px; display: none; }
+    .progress-wrap.visible { display: block; }
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: 12px; font-family: var(--mono);
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .progress-track {
+      height: 6px; background: var(--border);
+      border-radius: 6px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; width: 0%; border-radius: 6px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.5s ease;
+      position: relative;
+    }
+    .progress-fill::after {
+      content: '';
+      position: absolute; right: 0; top: 0; bottom: 0; width: 40px;
+      background: linear-gradient(90deg, transparent, rgba(0,0,0,0.15));
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { 0%{opacity:0} 50%{opacity:1} 100%{opacity:0} }
+
+    /* ─── Results Table ──────────────────────────────── */
+    .results-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .results-title {
+      font-weight: 800; font-size: 18px; letter-spacing: -0.02em;
+    }
+    .results-title span { color: var(--accent); }
+    .search-input {
+      padding: 8px 14px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: var(--mono); font-size: 12px;
+      outline: none; width: 200px; transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+
+    .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead { background: #eef0f8; }
+    th {
+      padding: 12px 16px; text-align: left;
+      font-family: var(--mono); font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--muted); white-space: nowrap;
+      cursor: pointer; user-select: none;
+    }
+    th:hover { color: var(--text); }
+    th .sort-icon { margin-left: 4px; opacity: 0.4; }
+    th.sorted .sort-icon { opacity: 1; color: var(--accent); }
+    td { padding: 14px 16px; border-top: 1px solid var(--border); vertical-align: top; }
+    tr:hover td { background: rgba(91,62,245,0.04); }
+
+    .company-name { font-weight: 600; font-size: 14px; }
+    .company-type {
+      font-family: var(--mono); font-size: 10px; color: var(--muted);
+      margin-top: 2px;
+    }
+    .location-text { font-size: 12px; color: var(--muted); }
+
+    .score-bar { display: flex; align-items: center; gap: 10px; }
+    .score-track {
+      flex: 1; height: 5px; background: var(--border); border-radius: 5px;
+    }
+    .score-fill { height: 100%; border-radius: 5px; transition: width 0.6s ease; }
+    .score-num { font-family: var(--mono); font-size: 12px; min-width: 34px; text-align: right; }
+
+    .badge-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .badge {
+      padding: 2px 8px; border-radius: 6px;
+      font-family: var(--mono); font-size: 10px;
+      background: rgba(91,62,245,0.08); color: var(--accent);
+      border: 1px solid rgba(91,62,245,0.15);
+    }
+    .badge.procfile { background: rgba(0,168,112,0.08); color: var(--green); border-color: rgba(0,229,160,0.2); }
+    .badge.heroku-yml { background: rgba(212,144,10,0.08); color: var(--yellow); border-color: rgba(245,197,24,0.2); }
+
+    .link-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--mono); font-size: 11px; color: var(--accent);
+      text-decoration: none; padding: 4px 8px;
+      border: 1px solid rgba(91,62,245,0.2); border-radius: 6px;
+      transition: background 0.15s; white-space: nowrap;
+    }
+    .link-btn:hover { background: rgba(91,62,245,0.06); }
+
+    /* ─── Empty state ────────────────────────────────── */
     .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--muted);
+      text-align: center; padding: 80px 20px;
+      color: var(--muted); font-family: var(--mono); font-size: 13px;
     }
-    
-    .empty-state-icon {
-      font-size: 48px;
-      margin-bottom: 15px;
+    .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+
+    /* ─── Scan running indicator ─────────────────────── */
+    .scanning-pulse {
+      display: none; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 12px; color: var(--accent);
     }
-    
-    /* Loading */
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: var(--muted);
+    .scanning-pulse.visible { display: flex; }
+    .scanning-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); animation: scanpulse 1.2s ease-in-out infinite;
     }
-    
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes scanpulse {
+      0%,100%{transform:scale(1);opacity:1}
+      50%{transform:scale(1.5);opacity:0.5}
     }
-    
-    .spinner {
-      display: inline-block;
-      width: 24px;
-      height: 24px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+
+    /* ─── Toast ──────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(100px);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 20px;
+      font-size: 13px; font-family: var(--mono);
+      transition: transform 0.3s ease; z-index: 9999;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
     }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: rgba(0,168,112,0.3); color: var(--green); }
+    .toast.error   { border-color: rgba(240,62,110,0.4); color: var(--accent2); }
+
+    /* ─── Tabs ───────────────────────────────────────── */
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+    .tab {
+      padding: 8px 18px; border-radius: 8px;
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); font-family: var(--sans); font-size: 13px;
+      cursor: pointer; transition: all 0.2s; font-weight: 600;
+    }
+    .tab.active {
+      background: rgba(91,62,245,0.08);
+      border-color: rgba(91,62,245,0.2); color: var(--accent);
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>☁️ Cloud Host Scanner</h1>
-      <p class="subtitle">Détection multi-providers : Heroku, AWS, GCP, Azure, et plus...</p>
-      
-      <div class="scan-controls">
-        <select id="scanCountry" style="width: 200px;">
-          <option value="FR">🇫🇷 France</option>
-          <option value="BE">🇧🇪 Belgique</option>
-          <option value="CH">🇨🇭 Suisse</option>
-          <option value="GB">🇬🇧 Royaume-Uni</option>
-          <option value="DE">🇩🇪 Allemagne</option>
-          <option value="ES">🇪🇸 Espagne</option>
-          <option value="IT">🇮🇹 Italie</option>
-          <option value="US">🇺🇸 États-Unis</option>
-          <option value="CA">🇨🇦 Canada</option>
-        </select>
-        
-        <button class="btn-scan" onclick="startScan()" id="scanBtn">
-          🚀 Lancer un scan
+<div class="app">
+
+  <!-- ─── Header ──────────────────────────────────── -->
+  <header>
+    <div class="logo-badge">🔍</div>
+    <div class="header-text">
+      <h1>Cloud <span>Scanner</span></h1>
+      <p>// détection Heroku · AWS · GCP via GitHub — monde entier</p>
+    </div>
+    <div class="pill">v1.0</div>
+  </header>
+
+  <!-- ─── Main Grid ────────────────────────────────── -->
+  <div class="grid">
+
+    <!-- ─── Left Panel ─ Config & Terminal ─────────── -->
+    <div>
+      <!-- Config Card -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">// configuration</div>
+
+        <div class="field">
+          <label>GitHub Token</label>
+          <div class="token-wrap">
+            <input type="text" id="token" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-form-type="other" />
+            <button class="toggle-pw" onclick="togglePw()" title="Afficher/masquer">👁</button>
+          </div>
+          <div class="token-status">
+            <div class="token-dot" id="tokenDot"></div>
+            <span id="tokenMsg" style="color:var(--muted)">En attente du token…</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Users analysés par ville/pays</label>
+          <div class="range-wrap">
+            <input type="range" id="maxRange" min="5" max="100" value="20"
+                   oninput="document.getElementById('maxVal').textContent=this.value" />
+            <span class="range-val" id="maxVal">20</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Clouds à détecter</label>
+          <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="cloud_heroku" checked style="accent-color:#6c38f5"> 🟣 Heroku
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="cloud_aws" checked style="accent-color:#e08000"> 🟠 AWS
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="cloud_gcp" checked style="accent-color:#2563eb"> 🔵 GCP
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Régions à scanner</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="reg_france" checked style="accent-color:var(--accent)"> 🇫🇷 France
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="reg_europe" checked style="accent-color:var(--accent)"> 🇪🇺 Europe
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="reg_americas_latam" style="accent-color:var(--accent)"> 🌎 LATAM
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="reg_asia" style="accent-color:var(--accent)"> 🌏 Asie
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="reg_africa_mena" style="accent-color:var(--accent)"> 🌍 Afrique/MENA
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="reg_canada" style="accent-color:var(--accent)"> 🍁 Canada
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="reg_oceania" style="accent-color:var(--accent)"> 🦘 Océanie
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text)">
+              <input type="checkbox" id="reg_usa" style="accent-color:var(--accent)"> 🇺🇸 USA
+            </label>
+          </div>
+        </div>
+
+        <button class="btn" id="scanBtn" onclick="startScan()" disabled>
+          🚀 Lancer le scan
         </button>
-        
-        <div class="scan-status" id="scanStatus" style="display: none;">
-          <div class="spinner-inline"></div>
-          <span id="scanStatusText">Scan en cours...</span>
+      </div>
+
+      <!-- Terminal -->
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>// terminal</span>
+          <div class="scanning-pulse" id="scanPulse">
+            <div class="scanning-dot"></div>
+            <span>Scan en cours…</span>
+          </div>
         </div>
-      </div>
-    </header>
-    
-    <div class="logs-container" id="logsContainer"></div>
-    
-    <div class="stats" id="stats">
-      <div class="stat-card">
-        <div class="stat-value" id="statTotal">-</div>
-        <div class="stat-label">Hosts détectés</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="statSelected">-</div>
-        <div class="stat-label">Sélectionnés</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="statProviders">-</div>
-        <div class="stat-label">Providers</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="statCountries">-</div>
-        <div class="stat-label">Pays</div>
-      </div>
-    </div>
-    
-    <div class="filters">
-      <div class="filter-row">
-        <div class="filter-group">
-          <label>Provider</label>
-          <select id="filterProvider" onchange="loadHosts()">
-            <option value="all">Tous les providers</option>
-            {% for key, info in providers.items() %}
-            <option value="{{ key }}">{{ info.icon }} {{ info.name }}</option>
-            {% endfor %}
-          </select>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <div class="t-dot r"></div>
+            <div class="t-dot y"></div>
+            <div class="t-dot g"></div>
+            <span class="terminal-title">cloud-scanner — bash</span>
+          </div>
+          <div class="terminal-body" id="terminalBody">
+            <div class="log-line" style="color:var(--accent)">
+              ██╗  ██╗███████╗██████╗  ██████╗ ██╗  ██╗██╗   ██╗
+            </div>
+            <div class="log-line" style="color:var(--accent);opacity:.8">
+              ██║  ██║██╔════╝██╔══██╗██╔═══██╗██║ ██╔╝██║   ██║
+            </div>
+            <div class="log-line" style="color:var(--accent);opacity:.6">
+              ███████║█████╗  ██████╔╝██║   ██║█████╔╝ ██║   ██║
+            </div>
+            <div class="log-line" style="color:var(--muted)">──────────────────────────────────────</div>
+            <div class="log-line">Entrez votre token GitHub et cliquez sur Lancer le scan.</div>
+            <div class="log-line" style="color:var(--muted)">Token requis sur : github.com/settings/tokens</div>
+            <div class="log-line" style="color:var(--muted)">Scopes : repo · read:org · read:user</div>
+          </div>
         </div>
-        
-        <div class="filter-group">
-          <label>Pays</label>
-          <select id="filterCountry" onchange="loadHosts()">
-            <option value="all">Tous les pays</option>
-            {% for code, info in countries.items() %}
-            <option value="{{ code }}">{{ info.icon }} {{ info.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        
-        <div class="filter-group">
-          <label>Affichage</label>
-          <select id="filterSelected" onchange="loadHosts()">
-            <option value="false">Tous</option>
-            <option value="true">Sélectionnés uniquement</option>
-          </select>
-        </div>
-        
-        <div class="filter-group" style="flex: 0;">
-          <label>&nbsp;</label>
-          <button class="btn-success" onclick="exportCSV()" id="exportBtn">
-            📥 Exporter CSV
-          </button>
+
+        <!-- Progress -->
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-label">
+            <span id="progressLabel">Initialisation…</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
         </div>
       </div>
     </div>
-    
-    <div class="table-container">
-      <div class="table-header">
-        <div class="table-title">
-          <span id="tableTitle">Résultats</span>
+
+    <!-- ─── Right Panel ─ Results ────────────────── -->
+    <div>
+      <!-- Stats -->
+      <div class="stats-bar" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-box">
+          <div class="stat-num" id="statTotal">0</div>
+          <div class="stat-label">Total</div>
         </div>
-        <button class="btn-primary" onclick="loadHosts()">🔄 Actualiser</button>
-      </div>
-      
-      <div id="tableContent">
-        <div class="loading">
-          <div class="spinner"></div>
-          <p>Chargement...</p>
+        <div class="stat-box">
+          <div class="stat-num" id="statFR" style="color:#e63946">0</div>
+          <div class="stat-label">🇫🇷 France</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="statWorld">0</div>
+          <div class="stat-label">🌍 Monde</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="statAvg">—</div>
+          <div class="stat-label">Score moy.</div>
         </div>
       </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('fr')">🇫🇷 France</button>
+        <button class="tab" onclick="switchTab('world')">🌍 Monde</button>
+        <button class="tab" onclick="switchTab('cards')">🃏 Cartes</button>
+        <button class="tab" onclick="switchTab('db')">🗄️ BDD</button>
+      </div>
+
+      <!-- Tab: France -->
+      <div class="tab-content active" id="tab-fr">
+        <div class="results-header">
+          <div class="results-title">🇫🇷 Entreprises françaises <span id="countBadgeFR"></span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="search-input" id="searchInputFR" placeholder="🔎 Filtrer…" oninput="filterResults('fr')" />
+            <button class="link-btn" onclick="exportCSV('fr')" title="Exporter en CSV">⬇️ CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th onclick="sortBy('company_name')">Entreprise <span class="sort-icon">↕</span></th>
+              <th>Localisation</th>
+              <th onclick="sortBy('confidence_score')">Score <span class="sort-icon">↕</span></th>
+              <th>Indicateurs</th>
+              <th>Liens</th>
+            </tr></thead>
+            <tbody id="tableBodyFR">
+              <tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🇫🇷</div><div>Lancez un scan</div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Monde -->
+      <div class="tab-content" id="tab-world">
+        <div class="results-header">
+          <div class="results-title">🌍 Reste du monde <span id="countBadgeWorld"></span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="search-input" id="searchInputWorld" placeholder="🔎 Filtrer…" oninput="filterResults('world')" />
+            <button class="link-btn" onclick="exportCSV('world')" title="Exporter en CSV">⬇️ CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th onclick="sortBy('company_name')">Entreprise <span class="sort-icon">↕</span></th>
+              <th>Région</th>
+              <th onclick="sortBy('confidence_score')">Score <span class="sort-icon">↕</span></th>
+              <th>Indicateurs</th>
+              <th>Liens</th>
+            </tr></thead>
+            <tbody id="tableBodyWorld">
+              <tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🌍</div><div>Lancez un scan</div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Cards -->
+      <div class="tab-content" id="tab-cards">
+        <div id="cardsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+          <div class="empty-state" style="grid-column:1/-1">
+            <div class="empty-icon">🃏</div>
+            <div>Les cartes apparaîtront après le scan</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: BDD -->
+      <div class="tab-content" id="tab-db">
+        <div class="results-header" style="margin-bottom:16px">
+          <div class="results-title">Base de données <span id="dbCountBadge"></span></div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <input class="search-input" id="dbSearchInput" placeholder="🔎 Filtrer…" oninput="filterDB()" />
+            <a href="/api/database/export" class="link-btn" style="white-space:nowrap">⬇️ CSV</a>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+          <div class="stat-box"><div class="stat-num" id="dbTotal">—</div><div class="stat-label">Total</div></div>
+          <div class="stat-box"><div class="stat-num" id="dbOrgs">—</div><div class="stat-label">Orgs</div></div>
+          <div class="stat-box"><div class="stat-num" id="dbAvg">—</div><div class="stat-label">Score moy.</div></div>
+          <div class="stat-box" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:var(--mono);font-size:11px;text-align:center" id="dbLastScan">Dernier scan</div>
+        </div>
+        <div class="table-wrap">
+          <table id="dbTable">
+            <thead>
+              <tr>
+                <th onclick="sortDB('company_name')">Entreprise <span class="sort-icon">↕</span></th>
+                <th onclick="sortDB('location')">Localisation <span class="sort-icon">↕</span></th>
+                <th onclick="sortDB('confidence_score')">Score <span class="sort-icon">↕</span></th>
+                <th onclick="sortDB('scan_count')">Scans <span class="sort-icon">↕</span></th>
+                <th onclick="sortDB('last_seen')">Vu le <span class="sort-icon">↕</span></th>
+                <th>Liens</th>
+              </tr>
+            </thead>
+            <tbody id="dbTableBody">
+              <tr><td colspan="6">
+                <div class="empty-state">
+                  <div class="empty-icon">🗄️</div>
+                  <div>Cliquez sur l'onglet pour charger la base</div>
+                </div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
-  </div>
-  
-  <script>
-    const PROVIDERS = {{ providers | tojson }};
-    const COUNTRIES = {{ countries | tojson }};
-    let currentPage = 1;
-    let scanInterval = null;
-    
-    // ── Start scan ────────────────────────────────────────────
-    async function startScan() {
-      const country = document.getElementById('scanCountry').value;
-      const btn = document.getElementById('scanBtn');
-      const status = document.getElementById('scanStatus');
-      const logsContainer = document.getElementById('logsContainer');
-      
-      // UI updates
-      btn.disabled = true;
-      status.style.display = 'flex';
-      logsContainer.classList.add('active');
-      logsContainer.innerHTML = '<div class="log-line log-info">🚀 Démarrage du scan...</div>';
-      
-      try {
-        const resp = await fetch(`/api/trigger-scan?country=${country}`);
-        const data = await resp.json();
-        
-        addLog(`✅ Scan lancé pour ${country}`, 'success');
-        
-        // Poll logs every 2 seconds
-        scanInterval = setInterval(pollLogs, 2000);
-        
-        // Poll until done
-        setTimeout(checkScanComplete, 5000);
-        
-      } catch (err) {
-        addLog(`❌ Erreur: ${err.message}`, 'error');
-        btn.disabled = false;
-        status.style.display = 'none';
-      }
-    }
-    
-    function addLog(message, type = 'info') {
-      const logsContainer = document.getElementById('logsContainer');
-      const logLine = document.createElement('div');
-      logLine.className = `log-line log-${type}`;
-      logLine.textContent = message;
-      logsContainer.appendChild(logLine);
-      logsContainer.scrollTop = logsContainer.scrollHeight;
-    }
-    
-    async function pollLogs() {
-      // TODO: implement actual log streaming if needed
-      // For now, just refresh stats
-      loadStats();
-    }
-    
-    async function checkScanComplete() {
-      // Check if scan is done by looking at stats changes
-      const resp = await fetch('/api/stats');
-      if (resp.ok) {
-        loadHosts();
-        loadStats();
-      }
-      
-      // Keep checking every 10s for 5 minutes max
-      if (scanInterval && performance.now() < 300000) {
-        setTimeout(checkScanComplete, 10000);
+  </div><!-- /grid -->
+</div><!-- /app -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+  /* ─── State ──────────────────────────────────────────── */
+  let allResults  = [];
+  let frResults   = [];
+  let worldResults= [];
+  let sortField   = 'confidence_score';
+  let sortAsc     = false;
+  let tokenCheckTimer = null;
+  let eventSource = null;
+  let scanFoundCount = 0;
+
+  /* ─── Init ───────────────────────────────────────────── */
+  window.onload = () => {
+    loadExistingResults();
+    const tokenEl = document.getElementById('token');
+    tokenEl.addEventListener('input', onTokenInput);
+    tokenEl.addEventListener('paste', () => setTimeout(onTokenInput, 50));
+    // Vider le champ au chargement pour éviter l'autofill
+    tokenEl.value = '';
+  };
+
+  /* ─── Token validation ───────────────────────────────── */
+  function onTokenInput() {
+    clearTimeout(tokenCheckTimer);
+    const v = document.getElementById('token').value.trim();
+    if (!v) { setTokenStatus('idle', 'En attente du token…'); return; }
+    setTokenStatus('checking', 'Vérification…');
+    tokenCheckTimer = setTimeout(() => checkToken(v), 800);
+  }
+
+  async function checkToken(token) {
+    try {
+      const r = await fetch('/api/test-token', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({token})
+      });
+      const d = await r.json();
+      if (d.valid) {
+        setTokenStatus('valid', `✓ Core: ${d.core_remaining}/5000 · Search: ${d.search_remaining}/30`);
+        document.getElementById('scanBtn').disabled = false;
+        document.getElementById('scanBtn').style.opacity = '1';
       } else {
-        stopScan();
+        setTokenStatus('invalid', `✗ ${d.error || 'Token invalide'}`);
+        document.getElementById('scanBtn').disabled = true;
+        document.getElementById('scanBtn').style.opacity = '0.5';
       }
+    } catch(e) {
+      setTokenStatus('invalid', `✗ Erreur réseau`);
     }
-    
-    function stopScan() {
-      const btn = document.getElementById('scanBtn');
-      const status = document.getElementById('scanStatus');
-      
-      btn.disabled = false;
-      status.style.display = 'none';
-      
-      if (scanInterval) {
-        clearInterval(scanInterval);
-        scanInterval = null;
-      }
-      
-      addLog('✅ Scan terminé', 'success');
-      loadHosts();
-      loadStats();
-    }
-    
-    // ── Load hosts ────────────────────────────────────────────
-    async function loadHosts(page = 1) {
-      const provider = document.getElementById('filterProvider').value;
-      const country = document.getElementById('filterCountry').value;
-      const selected = document.getElementById('filterSelected').value;
-      
-      const params = new URLSearchParams({
-        provider, country, selected, page, per_page: 50
+  }
+
+  function setTokenStatus(state, msg) {
+    const dot = document.getElementById('tokenDot');
+    const txt = document.getElementById('tokenMsg');
+    dot.className = `token-dot ${state === 'idle' ? '' : state}`;
+    txt.textContent = msg;
+    txt.style.color = state === 'valid' ? 'var(--green)' : state === 'invalid' ? 'var(--accent2)' : 'var(--muted)';
+  }
+
+  function togglePw() {
+    const inp = document.getElementById('token');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  }
+
+  /* ─── Scan (polling — compatible proxies/PaaS) ──────────── */
+  let pollTimer = null;
+  let logOffset = 0;
+
+  async function startScan() {
+    const token = document.getElementById('token').value.trim();
+    const maxCompanies = parseInt(document.getElementById('maxRange').value);
+
+    clearTerminal();
+    addLog('🚀 Démarrage du scan…', 'accent');
+    addLog(`   Token: ${token.substring(0,8)}…`, '');
+    addLog(`   Objectif: ${maxCompanies} entreprises`, '');
+    addLog('─'.repeat(50), '');
+
+    document.getElementById('scanBtn').disabled = true;
+    document.getElementById('scanPulse').classList.add('visible');
+    document.getElementById('progressWrap').classList.add('visible');
+    scanFoundCount = 0;
+    logOffset = 0;
+    setStats(0, 0, '—');
+
+    // Récupérer les régions cochées
+    const REGIONS = ['france','europe','americas_latam','asia','africa_mena','canada','oceania','usa'];
+    const regions = REGIONS.filter(r => {
+      const el = document.getElementById('reg_' + r);
+      return el && el.checked;
+    });
+    if (!regions.length) { addLog('❌ Sélectionnez au moins une région', 'red'); scanDone(); return; }
+
+    addLog(`   Régions: ${regions.join(', ')}`, '');
+
+    // Clouds cochés
+    const clouds = ['heroku','aws','gcp'].filter(c => {
+      const el = document.getElementById('cloud_' + c);
+      return el && el.checked;
+    });
+    if (!clouds.length) { addLog('❌ Sélectionnez au moins un cloud', 'red'); scanDone(); return; }
+    addLog(`   Clouds: ${clouds.join(', ')}`, '');
+
+    try {
+      const r = await fetch('/api/scan/start', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({token, max_per_location: maxCompanies, regions, clouds})
       });
-      
-      try {
-        const resp = await fetch(`/api/hosts?${params}`);
-        const data = await resp.json();
-        
-        currentPage = page;
-        renderTable(data);
-        
-      } catch (err) {
-        document.getElementById('tableContent').innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">❌</div>
-            <p>Erreur de chargement</p>
-          </div>
-        `;
-      }
+      const d = await r.json();
+      if (d.error) { addLog(`❌ ${d.error}`, 'red'); scanDone(); return; }
+
+      // Démarrer le polling toutes les 2 secondes
+      startPolling(maxCompanies);
+    } catch(e) {
+      addLog(`❌ Erreur: ${e.message}`, 'red');
+      scanDone();
     }
-    
-    // ── Load stats ────────────────────────────────────────────
-    async function loadStats() {
-      try {
-        const resp = await fetch('/api/stats');
-        const data = await resp.json();
-        
-        document.getElementById('statTotal').textContent = data.total.toLocaleString();
-        document.getElementById('statSelected').textContent = data.selected.toLocaleString();
-        document.getElementById('statProviders').textContent = data.by_provider.length;
-        document.getElementById('statCountries').textContent = data.by_country.length;
-        
-      } catch (err) {
-        console.error('Erreur stats:', err);
-      }
-    }
-    
-    // ── Render table ──────────────────────────────────────────
-    function renderTable(data) {
-      const { hosts, total, page, pages } = data;
-      
-      if (hosts.length === 0) {
-        document.getElementById('tableContent').innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">🔍</div>
-            <p>Aucun résultat trouvé</p>
-          </div>
-        `;
-        return;
-      }
-      
-      let html = `
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 50px;">✓</th>
-              <th>Domain / IP</th>
-              <th>Provider</th>
-              <th>Pays</th>
-              <th>Status</th>
-              <th>Découvert</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      
-      hosts.forEach(h => {
-        const providerInfo = PROVIDERS[h.provider] || {};
-        const countryInfo = COUNTRIES[h.country] || {};
-        
-        html += `
-          <tr>
-            <td class="checkbox-cell">
-              <input type="checkbox" 
-                     ${h.selected ? 'checked' : ''} 
-                     onchange="toggleSelection(${h.id})">
-            </td>
-            <td>
-              <a href="http://${h.domain || h.ip}" target="_blank" class="domain-link">
-                ${h.domain || h.ip}
-              </a>
-              ${h.domain ? `<br><span class="ip-text">${h.ip}</span>` : ''}
-            </td>
-            <td>
-              <span class="provider-badge" style="background: ${providerInfo.color}22; color: ${providerInfo.color}">
-                ${providerInfo.icon} ${providerInfo.name}
-              </span>
-            </td>
-            <td>
-              <span class="country-badge">
-                ${countryInfo.icon} ${countryInfo.name}
-              </span>
-            </td>
-            <td>${h.status_code || '-'}</td>
-            <td style="color: var(--muted); font-size: 13px;">
-              ${new Date(h.discovered_at).toLocaleString('fr-FR')}
-            </td>
-          </tr>
-        `;
+  }
+
+  function startPolling(maxCompanies) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => pollStatus(maxCompanies), 2000);
+  }
+
+  async function pollStatus(maxCompanies) {
+    try {
+      // Récupérer les nouveaux logs depuis le dernier offset
+      const logR = await fetch(`/api/scan/logs?offset=${logOffset}`);
+      const logD = await logR.json();
+
+      // Afficher les nouveaux logs dans le terminal
+      (logD.logs || []).forEach(text => {
+        let cls = '';
+        if (text.includes('✅') || text.includes('Entité française')) cls = 'green';
+        else if (text.includes('❌') || text.includes('Erreur'))       cls = 'red';
+        else if (text.includes('⚠️'))                                  cls = 'yellow';
+        else if (text.includes('🔍') || text.includes('🚀') || text.includes('📊')) cls = 'accent';
+        addLog(text, cls);
       });
-      
-      html += `
-          </tbody>
-        </table>
-        <div class="pagination">
-          <button onclick="loadHosts(${page - 1})" ${page === 1 ? 'disabled' : ''}>
-            ← Précédent
-          </button>
-          <span class="page-info">
-            Page ${page} / ${pages} (${total.toLocaleString()} résultats)
-          </span>
-          <button onclick="loadHosts(${page + 1})" ${page === pages ? 'disabled' : ''}>
-            Suivant →
-          </button>
+      logOffset = logD.offset || logOffset;
+
+      // Mettre à jour le compteur d'entreprises trouvées
+      if (logD.total_found > scanFoundCount) {
+        scanFoundCount = logD.total_found;
+        updateProgress(scanFoundCount, maxCompanies);
+        setStats(scanFoundCount, null, null, null);
+      }
+
+      // Scan terminé ?
+      if (logD.done) {
+        const statusR = await fetch('/api/scan/status');
+        const statusD = await statusR.json();
+        clearInterval(pollTimer);
+        pollTimer = null;
+
+        const results = statusD.results || [];
+        allResults = results;
+        renderResults(results);
+
+        const avg = results.length
+          ? Math.round(results.reduce((s,c) => s + c.confidence_score, 0) / results.length) + '%'
+          : '—';
+        setStats(results.length, results.filter(c => c.is_french).length, results.filter(c => !c.is_french).length, avg);
+
+        updateProgress(maxCompanies, maxCompanies);
+        addLog('─'.repeat(50), '');
+        addLog(`✅ Scan terminé — ${results.length} entreprises trouvées`, 'green');
+        scanDone();
+        showToast(`✅ ${results.length} entreprises détectées (Heroku / AWS / GCP) !`, 'success');
+      }
+
+      if (logD.error) {
+        clearInterval(pollTimer);
+        addLog(`❌ Erreur: ${logD.error}`, 'red');
+        scanDone();
+      }
+
+    } catch(e) {
+      addLog(`⚠️  Polling: ${e.message}`, 'yellow');
+    }
+  }
+
+  function scanDone() {
+    document.getElementById('scanBtn').disabled = false;
+    document.getElementById('scanPulse').classList.remove('visible');
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  function updateProgress(current, max) {
+    const pct = Math.min(Math.round((current / max) * 100), 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressPct').textContent = pct + '%';
+    document.getElementById('progressLabel').textContent = `${current} / ${max} entreprises analysées`;
+  }
+
+  /* ─── Terminal ───────────────────────────────────────── */
+  function addLog(text, cls = '') {
+    const body = document.getElementById('terminalBody');
+    const line = document.createElement('div');
+    line.className = `log-line${cls ? ' ' + cls : ''}`;
+    line.textContent = text;
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function clearTerminal() {
+    document.getElementById('terminalBody').innerHTML = '';
+  }
+
+  /* ─── Stats ──────────────────────────────────────────── */
+  function setStats(total, fr, world, avg) {
+    if (total !== null)  animateNum('statTotal', total);
+    if (fr    !== null)  animateNum('statFR',    fr);
+    if (world !== null)  animateNum('statWorld', world);
+    if (avg   !== null)  document.getElementById('statAvg').textContent = avg;
+  }
+
+  function animateNum(id, target) {
+    const el = document.getElementById(id);
+    const start = parseInt(el.textContent) || 0;
+    const duration = 600;
+    const startTime = performance.now();
+    const update = (now) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      el.textContent = Math.round(start + (target - start) * t);
+      if (t < 1) requestAnimationFrame(update);
+    };
+    requestAnimationFrame(update);
+  }
+
+  /* ─── Render Results ─────────────────────────────────── */
+  function renderResults(data) {
+    frResults    = data.filter(c => c.is_french);
+    worldResults = data.filter(c => !c.is_french);
+    renderTable(frResults,    'tableBodyFR',    'countBadgeFR',    false);
+    renderTable(worldResults, 'tableBodyWorld', 'countBadgeWorld', true);
+    renderCards(data);
+    const frEl = document.getElementById('statFR');
+    const wEl  = document.getElementById('statWorld');
+    if (frEl) animateNum('statFR',    frResults.length);
+    if (wEl)  animateNum('statWorld', worldResults.length);
+  }
+
+  function renderTable(data, tbodyId = 'tableBodyFR', badgeId = 'countBadgeFR', showRegion = false) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    if (badgeId) document.getElementById(badgeId).textContent = data.length ? `— ${data.length}` : '';
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="5">
+        <div class="empty-state"><div class="empty-icon">🔍</div><div>Aucun résultat</div></div>
+      </td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.map(c => {
+      const scoreColor = c.confidence_score >= 80 ? 'var(--green)' :
+                         c.confidence_score >= 60 ? 'var(--yellow)' : 'var(--accent2)';
+      const badges = (c.heroku_indicators || []).map(ind => {
+        const cls = ind.includes('Procfile') ? 'procfile' :
+                    ind.includes('heroku.yml') ? 'heroku-yml' : '';
+        return `<span class="badge ${cls}">${ind.replace('File: ','')}</span>`;
+      }).join('');
+      // Badges cloud providers
+      const cloudBadges = (c.cloud_providers || []).map(p => {
+        const colors = {
+          heroku: 'background:rgba(108,56,245,0.12);color:#6c38f5;border-color:rgba(108,56,245,0.25)',
+          aws:    'background:rgba(255,153,0,0.12);color:#e08000;border-color:rgba(255,153,0,0.3)',
+          gcp:    'background:rgba(66,133,244,0.12);color:#2563eb;border-color:rgba(66,133,244,0.3)',
+        };
+        const icons = { heroku:'🟣', aws:'🟠', gcp:'🔵' };
+        const style = colors[p] || '';
+        return `<span class="badge" style="${style}">${icons[p]||''} ${p.toUpperCase()}</span>`;
+      }).join('');
+
+      const website = c.website
+        ? `<a class="link-btn" href="${c.website.startsWith('http') ? c.website : 'https://'+c.website}" target="_blank">🌐 Site</a>`
+        : '';
+
+      return `<tr>
+        <td>
+          <div class="company-name">${esc(c.company_name)}</div>
+          <div class="company-type">${c.company_type} · ${c.repos_count} repos</div>
+        </td>
+        <td><div class="location-text">${esc(c.location || '—')}${showRegion && c.region ? `<span style="margin-left:6px;font-size:10px;color:var(--muted)">${c.region}</span>` : ''}</div></td>
+        <td>
+          <div class="score-bar">
+            <div class="score-track">
+              <div class="score-fill" style="width:${c.confidence_score}%;background:${scoreColor}"></div>
+            </div>
+            <span class="score-num" style="color:${scoreColor}">${c.confidence_score}%</span>
+          </div>
+        </td>
+        <td>
+          <div class="badge-row">${cloudBadges}${badges || ''}</div>
+          ${!cloudBadges && !badges ? '<span style="color:var(--muted);font-size:11px">—</span>' : ''}
+        </td>
+        <td style="white-space:nowrap">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${website}
+            <a class="link-btn" href="${c.github_url}" target="_blank">🐱 GitHub</a>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderCards(data) {
+    const grid = document.getElementById('cardsGrid');
+    if (!data.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">🃏</div>
+        <div>Aucun résultat à afficher</div>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = data.map(c => {
+      const scoreColor = c.confidence_score >= 80 ? 'var(--green)' :
+                         c.confidence_score >= 60 ? 'var(--yellow)' : 'var(--accent2)';
+      return `<div class="card" style="animation:fadeIn 0.3s ease">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+          <div>
+            <div style="font-weight:700;font-size:15px">${esc(c.company_name)}</div>
+            <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px">
+              ${c.company_type} · ${esc(c.location || 'France')}
+            </div>
+          </div>
+          <div style="font-family:var(--mono);font-weight:700;font-size:18px;color:${scoreColor}">
+            ${c.confidence_score}%
+          </div>
         </div>
-      `;
-      
-      document.getElementById('tableContent').innerHTML = html;
+        ${c.bio ? `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">${esc(c.bio.substring(0,80))}${c.bio.length>80?'…':''}</div>` : ''}
+        <div class="badge-row" style="margin-bottom:14px">
+          ${(c.heroku_indicators||[]).map(ind => {
+            const cls = ind.includes('Procfile') ? 'procfile' : ind.includes('heroku.yml') ? 'heroku-yml' : '';
+            return `<span class="badge ${cls}">${ind.replace('File: ','')}</span>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:8px">
+          ${c.website ? `<a class="link-btn" href="${c.website.startsWith('http')?c.website:'https://'+c.website}" target="_blank">🌐 Site</a>` : ''}
+          <a class="link-btn" href="${c.github_url}" target="_blank">🐱 GitHub</a>
+          ${c.twitter ? `<a class="link-btn" href="https://twitter.com/${c.twitter}" target="_blank">🐦 @${c.twitter}</a>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  /* ─── Filter & Sort ──────────────────────────────────── */
+  function filterResults(tab = 'fr') {
+    const inputId = tab === 'fr' ? 'searchInputFR' : 'searchInputWorld';
+    const q = (document.getElementById(inputId)?.value || '').toLowerCase();
+    const source = tab === 'fr' ? frResults : worldResults;
+    const tbodyId = tab === 'fr' ? 'tableBodyFR' : 'tableBodyWorld';
+    const badgeId = tab === 'fr' ? 'countBadgeFR' : 'countBadgeWorld';
+    const filtered = source.filter(c =>
+      (c.company_name || '').toLowerCase().includes(q) ||
+      (c.location || '').toLowerCase().includes(q) ||
+      (c.bio || '').toLowerCase().includes(q)
+    );
+    renderTable(filtered, tbodyId, badgeId, tab !== 'fr');
+  }
+
+  function sortBy(field) {
+    if (sortField === field) sortAsc = !sortAsc;
+    else { sortField = field; sortAsc = false; }
+
+    // Update header icons
+    document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
+    event.currentTarget.classList.add('sorted');
+
+    allResults.sort((a, b) => {
+      let va = a[field] || '', vb = b[field] || '';
+      if (typeof va === 'number') return sortAsc ? va - vb : vb - va;
+      return sortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+    filterResults();
+  }
+
+  /* ─── Tabs ───────────────────────────────────────────── */
+  const TAB_ORDER = ['fr', 'world', 'cards', 'db'];
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t, i) =>
+      t.classList.toggle('active', TAB_ORDER[i] === tab)
+    );
+    document.querySelectorAll('.tab-content').forEach(tc =>
+      tc.classList.toggle('active', tc.id === 'tab-' + tab)
+    );
+    // Charger la BDD à la première ouverture
+    if (tab === 'db') loadDatabase();
+  }
+
+  /* ─── Base de données ────────────────────────────────── */
+  let dbData = [];
+  let dbSortField = 'confidence_score';
+  let dbSortAsc   = false;
+  let dbLoaded    = false;
+
+  async function loadDatabase(force = false) {
+    if (dbLoaded && !force) return;
+    const search = document.getElementById('dbSearchInput').value;
+    try {
+      const r = await fetch(`/api/database?search=${encodeURIComponent(search)}&sort=${dbSortField}&order=${dbSortAsc?'asc':'desc'}`);
+      const d = await r.json();
+      dbData   = d.companies || [];
+      dbLoaded = true;
+      renderDBTable(dbData);
+      // Stats BDD
+      const s = d.stats || {};
+      document.getElementById('dbTotal').textContent = s.total || 0;
+      document.getElementById('dbOrgs').textContent  = s.orgs  || 0;
+      document.getElementById('dbAvg').textContent   = s.avg_score ? s.avg_score + '%' : '—';
+      document.getElementById('dbCountBadge').textContent = dbData.length ? `— ${dbData.length}` : '';
+      const lastScan = s.last_scan ? s.last_scan.substring(0,10) : '—';
+      document.getElementById('dbLastScan').textContent = 'Dernier scan\n' + lastScan;
+    } catch(e) {
+      console.error('Erreur chargement BDD:', e);
     }
-    
-    // ── Toggle selection ──────────────────────────────────────
-    async function toggleSelection(id) {
-      try {
-        await fetch(`/api/toggle/${id}`, { method: 'POST' });
-        loadStats();
-      } catch (err) {
-        console.error('Erreur toggle:', err);
+  }
+
+  function filterDB() {
+    dbLoaded = false;
+    loadDatabase();
+  }
+
+  function sortDB(field) {
+    if (dbSortField === field) dbSortAsc = !dbSortAsc;
+    else { dbSortField = field; dbSortAsc = false; }
+    dbLoaded = false;
+    loadDatabase();
+  }
+
+  function renderDBTable(data) {
+    const tbody = document.getElementById('dbTableBody');
+    if (!data.length) {
+      tbody.innerHTML = `<tr><td colspan="6">
+        <div class="empty-state">
+          <div class="empty-icon">🗄️</div>
+          <div>Aucune entreprise en base — lancez un scan !</div>
+        </div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(c => {
+      const scoreColor = c.confidence_score >= 80 ? 'var(--green)' :
+                         c.confidence_score >= 60 ? 'var(--yellow)' : 'var(--accent2)';
+      const date = c.last_seen ? c.last_seen.substring(0,10) : '—';
+      const website = c.website
+        ? `<a class="link-btn" href="${c.website.startsWith('http')?c.website:'https://'+c.website}" target="_blank">🌐</a>`
+        : '';
+      const scanBadge = c.scan_count > 1
+        ? `<span style="background:rgba(91,62,245,0.1);color:var(--accent);border-radius:6px;padding:2px 7px;font-size:11px;font-family:var(--mono)">${c.scan_count}×</span>`
+        : `<span style="color:var(--muted);font-family:var(--mono);font-size:11px">1×</span>`;
+      return `<tr>
+        <td>
+          <div class="company-name">${esc(c.company_name || c.github_login)}</div>
+          <div class="company-type">${c.company_type || ''}</div>
+        </td>
+        <td><div class="location-text">${esc(c.location || '—')}</div></td>
+        <td>
+          <div class="score-bar">
+            <div class="score-track"><div class="score-fill" style="width:${c.confidence_score}%;background:${scoreColor}"></div></div>
+            <span class="score-num" style="color:${scoreColor}">${c.confidence_score}%</span>
+          </div>
+        </td>
+        <td style="text-align:center">${scanBadge}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${date}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            ${website}
+            <a class="link-btn" href="${c.github_url}" target="_blank">🐱</a>
+            ${c.twitter ? `<a class="link-btn" href="https://twitter.com/${c.twitter}" target="_blank">🐦</a>` : ''}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  /* ─── Load existing ──────────────────────────────────── */
+  async function loadExistingResults() {
+    try {
+      const r = await fetch('/api/results');
+      const d = await r.json();
+      if (d.companies && d.companies.length) {
+        allResults = d.companies;
+        renderResults(allResults);
+        setStats(
+          d.total_companies,
+          d.companies.filter(c => c.company_type === 'Organization').length,
+          d.total_companies
+            ? Math.round(d.companies.reduce((s,c) => s+c.confidence_score,0)/d.total_companies) + '%'
+            : '—'
+        );
+        addLog(`📂 ${d.companies.length} résultats chargés depuis le dernier scan`, 'green');
+        addLog(`   Date: ${d.scan_date || 'N/A'}`, '');
       }
-    }
-    
-    // ── Export CSV ────────────────────────────────────────────
-    async function exportCSV() {
-      window.location.href = '/api/export';
-    }
-    
-    // ── Init ──────────────────────────────────────────────────
-    loadHosts();
-    loadStats();
-    setInterval(loadStats, 10000); // Refresh stats toutes les 10s
-  </script>
+    } catch(e) { /* pas de résultats existants */ }
+  }
+
+  /* ─── Toast ──────────────────────────────────────────── */
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  /* ─── Utils ──────────────────────────────────────────── */
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
 </body>
 </html>
