@@ -16,6 +16,7 @@
       --accent: #667eea;
       --success: #48bb78;
       --warning: #ed8936;
+      --danger: #f56565;
     }
     
     body {
@@ -26,10 +27,7 @@
       padding: 20px;
     }
     
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
+    .container { max-width: 1600px; margin: 0 auto; }
     
     /* Header */
     header {
@@ -57,10 +55,24 @@
     
     /* Scan Controls */
     .scan-controls {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
       gap: 15px;
-      align-items: center;
-      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .control-label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     
     select {
@@ -72,34 +84,88 @@
       font-size: 15px;
       cursor: pointer;
       transition: all 0.2s;
-      min-width: 200px;
     }
     
     select:hover { border-color: var(--accent); }
     select:focus { outline: none; border-color: var(--accent); }
     
-    .btn-scan {
+    .range-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    input[type="range"] {
+      flex: 1;
+      height: 6px;
+      border-radius: 5px;
+      background: var(--border);
+      outline: none;
+      -webkit-appearance: none;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+    
+    .range-value {
+      min-width: 60px;
+      text-align: center;
+      font-weight: 600;
+      color: var(--accent);
+      font-size: 16px;
+    }
+    
+    .button-row {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+      align-items: center;
+    }
+    
+    .btn {
       padding: 14px 32px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
       border: none;
       border-radius: 10px;
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
       box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     }
     
-    .btn-scan:hover {
+    .btn-primary:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
     
-    .btn-scan:disabled {
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+    
+    .btn-danger:hover {
+      background: #e53e3e;
+      transform: translateY(-2px);
+    }
+    
+    .btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
-      transform: none;
+      transform: none !important;
     }
     
     .scan-status {
@@ -131,7 +197,7 @@
       border-radius: 16px;
       padding: 25px;
       margin-bottom: 30px;
-      max-height: 500px;
+      max-height: 400px;
       overflow-y: auto;
       font-family: "Monaco", "Courier New", monospace;
       font-size: 14px;
@@ -146,10 +212,6 @@
     .log-line {
       padding: 6px 0;
       border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    
-    .log-line:last-child {
-      border-bottom: none;
     }
     
     .log-success { color: var(--success); }
@@ -202,42 +264,65 @@
     }
     
     .filter-row {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 20px;
-      flex-wrap: wrap;
-      align-items: flex-end;
     }
     
     .filter-group {
-      flex: 1;
-      min-width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
     
-    .filter-group label {
-      display: block;
+    .filter-label {
       font-size: 13px;
       color: var(--muted);
-      margin-bottom: 10px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
     
-    .btn-export {
-      padding: 14px 28px;
-      background: var(--success);
+    /* Selection bar */
+    .selection-bar {
+      background: var(--accent);
+      color: white;
+      padding: 15px 25px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .selection-bar.active {
+      display: flex;
+    }
+    
+    .selection-count {
+      font-weight: 600;
+      font-size: 15px;
+    }
+    
+    .selection-actions {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .btn-small {
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.2);
       color: white;
       border: none;
-      border-radius: 10px;
-      font-size: 15px;
+      border-radius: 6px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
     }
     
-    .btn-export:hover {
-      background: #38a169;
-      transform: translateY(-2px);
+    .btn-small:hover {
+      background: rgba(255,255,255,0.3);
     }
     
     /* Table */
@@ -261,6 +346,11 @@
       font-weight: 600;
     }
     
+    .table-actions {
+      display: flex;
+      gap: 10px;
+    }
+    
     .btn-refresh {
       padding: 10px 20px;
       background: var(--bg);
@@ -269,6 +359,8 @@
       color: var(--text);
       cursor: pointer;
       transition: all 0.2s;
+      font-size: 14px;
+      font-weight: 500;
     }
     
     .btn-refresh:hover {
@@ -295,6 +387,11 @@
       letter-spacing: 0.5px;
     }
     
+    th.checkbox-col {
+      width: 50px;
+      text-align: center;
+    }
+    
     tbody tr {
       border-bottom: 1px solid var(--border);
       transition: background 0.2s;
@@ -302,6 +399,10 @@
     
     tbody tr:hover {
       background: rgba(102, 126, 234, 0.05);
+    }
+    
+    tbody tr.selected {
+      background: rgba(102, 126, 234, 0.1);
     }
     
     td {
@@ -343,8 +444,8 @@
     }
     
     input[type="checkbox"] {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       cursor: pointer;
       accent-color: var(--accent);
     }
@@ -380,6 +481,7 @@
       color: var(--text);
       cursor: pointer;
       transition: all 0.2s;
+      font-weight: 500;
     }
     
     .pagination button:hover:not(:disabled) {
@@ -402,23 +504,59 @@
   <div class="container">
     <header>
       <h1>☁️ Cloud Host Scanner</h1>
-      <p class="subtitle">Détection multi-providers via Shodan : Heroku, AWS, GCP, Azure, DigitalOcean, Netlify, Vercel, et plus...</p>
+      <p class="subtitle">Détection multi-providers via Shodan API</p>
       
       <div class="scan-controls">
-        <select id="scanCountry">
-          <option value="FR">🇫🇷 France</option>
-          <option value="BE">🇧🇪 Belgique</option>
-          <option value="CH">🇨🇭 Suisse</option>
-          <option value="GB">🇬🇧 Royaume-Uni</option>
-          <option value="DE">🇩🇪 Allemagne</option>
-          <option value="ES">🇪🇸 Espagne</option>
-          <option value="IT">🇮🇹 Italie</option>
-          <option value="US">🇺🇸 États-Unis</option>
-          <option value="CA">🇨🇦 Canada</option>
-        </select>
+        <div class="control-group">
+          <span class="control-label">Pays</span>
+          <select id="scanCountry">
+            <optgroup label="Europe">
+              <option value="FR">🇫🇷 France</option>
+              <option value="BE">🇧🇪 Belgique</option>
+              <option value="CH">🇨🇭 Suisse</option>
+              <option value="GB">🇬🇧 Royaume-Uni</option>
+              <option value="DE">🇩🇪 Allemagne</option>
+              <option value="ES">🇪🇸 Espagne</option>
+              <option value="IT">🇮🇹 Italie</option>
+              <option value="NL">🇳🇱 Pays-Bas</option>
+              <option value="PT">🇵🇹 Portugal</option>
+            </optgroup>
+            <optgroup label="Amériques">
+              <option value="US">🇺🇸 États-Unis</option>
+              <option value="CA">🇨🇦 Canada</option>
+              <option value="BR">🇧🇷 Brésil</option>
+              <option value="MX">🇲🇽 Mexique</option>
+            </optgroup>
+            <optgroup label="Asie">
+              <option value="JP">🇯🇵 Japon</option>
+              <option value="SG">🇸🇬 Singapour</option>
+              <option value="IN">🇮🇳 Inde</option>
+              <option value="CN">🇨🇳 Chine</option>
+            </optgroup>
+            <optgroup label="Océanie">
+              <option value="AU">🇦🇺 Australie</option>
+              <option value="NZ">🇳🇿 Nouvelle-Zélande</option>
+            </optgroup>
+          </select>
+        </div>
         
-        <button class="btn-scan" onclick="startScan()" id="scanBtn">
-          🚀 Lancer un scan Shodan
+        <div class="control-group">
+          <span class="control-label">Nombre de résultats</span>
+          <div class="range-container">
+            <input type="range" id="maxResults" min="50" max="1000" step="50" value="200" 
+                   oninput="document.getElementById('maxResultsValue').textContent=this.value">
+            <span class="range-value" id="maxResultsValue">200</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="button-row">
+        <button class="btn btn-primary" onclick="startScan()" id="scanBtn">
+          🚀 Lancer le scan
+        </button>
+        
+        <button class="btn btn-danger" onclick="stopScan()" id="stopBtn" style="display: none;">
+          ⏹ Arrêter le scan
         </button>
         
         <div class="scan-status" id="scanStatus" style="display: none;">
@@ -430,7 +568,7 @@
     
     <div class="logs-container" id="logsContainer"></div>
     
-    <div class="stats" id="stats">
+    <div class="stats">
       <div class="stat-card">
         <div class="stat-value" id="statTotal">0</div>
         <div class="stat-label">Sites détectés</div>
@@ -449,41 +587,46 @@
       </div>
     </div>
     
+    <div class="selection-bar" id="selectionBar">
+      <span class="selection-count"><span id="selectionCount">0</span> sélectionné(s)</span>
+      <div class="selection-actions">
+        <button class="btn-small" onclick="deselectAll()">Tout désélectionner</button>
+        <button class="btn-small" onclick="exportSelected()">📥 Exporter CSV</button>
+      </div>
+    </div>
+    
     <div class="filters">
       <div class="filter-row">
         <div class="filter-group">
-          <label>Provider</label>
+          <span class="filter-label">Provider</span>
           <select id="filterProvider" onchange="loadHosts()">
             <option value="all">Tous les providers</option>
-            {% for key, info in providers.items() %}
-            <option value="{{ key }}">{{ info.icon }} {{ info.name }}</option>
-            {% endfor %}
+            <option value="heroku">🟣 Heroku</option>
+            <option value="aws">🟠 Amazon AWS</option>
+            <option value="gcp">🔵 Google Cloud</option>
+            <option value="azure">🔷 Microsoft Azure</option>
+            <option value="digitalocean">🟢 DigitalOcean</option>
+            <option value="cloudflare">🟡 Cloudflare</option>
+            <option value="ovh">🔴 OVH</option>
+            <option value="netlify">🟤 Netlify</option>
+            <option value="vercel">⚫ Vercel</option>
+            <option value="render">🟠 Render</option>
+            <option value="scalingo">🇫🇷 Scalingo</option>
+            <option value="railway">🚂 Railway</option>
+            <option value="fly">✈️ Fly.io</option>
           </select>
         </div>
         
         <div class="filter-group">
-          <label>Pays</label>
+          <span class="filter-label">Pays</span>
           <select id="filterCountry" onchange="loadHosts()">
             <option value="all">Tous les pays</option>
-            {% for code, info in countries.items() %}
-            <option value="{{ code }}">{{ info.icon }} {{ info.name }}</option>
-            {% endfor %}
+            <option value="FR">🇫🇷 France</option>
+            <option value="BE">🇧🇪 Belgique</option>
+            <option value="GB">🇬🇧 Royaume-Uni</option>
+            <option value="US">🇺🇸 États-Unis</option>
+            <option value="DE">🇩🇪 Allemagne</option>
           </select>
-        </div>
-        
-        <div class="filter-group">
-          <label>Affichage</label>
-          <select id="filterSelected" onchange="loadHosts()">
-            <option value="false">Tous</option>
-            <option value="true">Sélectionnés uniquement</option>
-          </select>
-        </div>
-        
-        <div class="filter-group" style="flex: 0;">
-          <label>&nbsp;</label>
-          <button class="btn-export" onclick="exportCSV()">
-            📥 Exporter CSV
-          </button>
         </div>
       </div>
     </div>
@@ -491,7 +634,10 @@
     <div class="table-container">
       <div class="table-header">
         <div class="table-title">Résultats</div>
-        <button class="btn-refresh" onclick="loadHosts()">🔄 Actualiser</button>
+        <div class="table-actions">
+          <button class="btn-refresh" onclick="selectAllPages()">☑️ Tout sélectionner</button>
+          <button class="btn-refresh" onclick="loadHosts()">🔄 Actualiser</button>
+        </div>
       </div>
       
       <div id="tableContent">
@@ -504,44 +650,55 @@
   </div>
   
   <script>
-    const PROVIDERS = {{ providers | tojson }};
-    const COUNTRIES = {{ countries | tojson }};
     let currentPage = 1;
     let scanInterval = null;
+    let selectedIds = new Set();
     
-    // ── Start scan ────────────────────────────────────────────
     async function startScan() {
       const country = document.getElementById('scanCountry').value;
+      const maxResults = document.getElementById('maxResults').value;
       const btn = document.getElementById('scanBtn');
+      const stopBtn = document.getElementById('stopBtn');
       const status = document.getElementById('scanStatus');
       const logsContainer = document.getElementById('logsContainer');
       
       btn.disabled = true;
+      stopBtn.style.display = 'flex';
       status.style.display = 'flex';
       logsContainer.classList.add('active');
       logsContainer.innerHTML = '<div class="log-line log-info">🚀 Lancement du scan Shodan...</div>';
       
       try {
-        const resp = await fetch(`/api/trigger-scan?country=${country}`);
+        const resp = await fetch(`/api/trigger-scan?country=${country}&limit=${maxResults}`);
         const data = await resp.json();
         
-        addLog(`✅ Scan lancé pour ${country}`, 'success');
-        addLog(`⏳ Le scan peut prendre 2-5 minutes...`, 'info');
+        addLog(`✅ Scan lancé pour ${country} (max ${maxResults} résultats)`, 'success');
+        addLog(`⏳ Le scan peut prendre quelques minutes...`, 'info');
         
         scanInterval = setInterval(() => {
           loadStats();
           loadHosts();
         }, 5000);
         
-        setTimeout(() => {
-          stopScan();
-        }, 300000);
-        
       } catch (err) {
         addLog(`❌ Erreur: ${err.message}`, 'error');
-        btn.disabled = false;
-        status.style.display = 'none';
+        stopScan();
       }
+    }
+    
+    function stopScan() {
+      if (scanInterval) {
+        clearInterval(scanInterval);
+        scanInterval = null;
+      }
+      
+      document.getElementById('scanBtn').disabled = false;
+      document.getElementById('stopBtn').style.display = 'none';
+      document.getElementById('scanStatus').style.display = 'none';
+      
+      addLog('⏹ Scan arrêté', 'info');
+      loadHosts();
+      loadStats();
     }
     
     function addLog(message, type = 'info') {
@@ -553,40 +710,19 @@
       logsContainer.scrollTop = logsContainer.scrollHeight;
     }
     
-    function stopScan() {
-      const btn = document.getElementById('scanBtn');
-      const status = document.getElementById('scanStatus');
-      
-      btn.disabled = false;
-      status.style.display = 'none';
-      
-      if (scanInterval) {
-        clearInterval(scanInterval);
-        scanInterval = null;
-      }
-      
-      addLog('✅ Scan terminé', 'success');
-      loadHosts();
-      loadStats();
-    }
-    
-    // ── Load hosts ────────────────────────────────────────────
     async function loadHosts(page = 1) {
       const provider = document.getElementById('filterProvider').value;
       const country = document.getElementById('filterCountry').value;
-      const selected = document.getElementById('filterSelected').value;
       
       const params = new URLSearchParams({
-        provider, country, selected, page, per_page: 50
+        provider, country, selected: 'false', page, per_page: 50
       });
       
       try {
         const resp = await fetch(`/api/hosts?${params}`);
         const data = await resp.json();
-        
         currentPage = page;
         renderTable(data);
-        
       } catch (err) {
         document.getElementById('tableContent').innerHTML = `
           <div class="empty-state">
@@ -597,23 +733,20 @@
       }
     }
     
-    // ── Load stats ────────────────────────────────────────────
     async function loadStats() {
       try {
         const resp = await fetch('/api/stats');
         const data = await resp.json();
         
         document.getElementById('statTotal').textContent = data.total.toLocaleString();
-        document.getElementById('statSelected').textContent = data.selected.toLocaleString();
         document.getElementById('statProviders').textContent = data.by_provider.length;
         document.getElementById('statCountries').textContent = data.by_country.length;
-        
+        updateSelectionCount();
       } catch (err) {
         console.error('Erreur stats:', err);
       }
     }
     
-    // ── Render table ──────────────────────────────────────────
     function renderTable(data) {
       const { hosts, total, page, pages } = data;
       
@@ -627,11 +760,37 @@
         return;
       }
       
+      const PROVIDERS = {
+        heroku: {icon: '🟣', name: 'Heroku', color: '#6762a6'},
+        aws: {icon: '🟠', name: 'AWS', color: '#ff9900'},
+        gcp: {icon: '🔵', name: 'GCP', color: '#4285f4'},
+        azure: {icon: '🔷', name: 'Azure', color: '#0078d4'},
+        digitalocean: {icon: '🟢', name: 'DigitalOcean', color: '#0080ff'},
+        cloudflare: {icon: '🟡', name: 'Cloudflare', color: '#f38020'},
+        ovh: {icon: '🔴', name: 'OVH', color: '#123f6d'},
+        netlify: {icon: '🟤', name: 'Netlify', color: '#00c7b7'},
+        vercel: {icon: '⚫', name: 'Vercel', color: '#000000'},
+        render: {icon: '🟠', name: 'Render', color: '#46e3b7'},
+        scalingo: {icon: '🇫🇷', name: 'Scalingo', color: '#3b4aff'},
+        railway: {icon: '🚂', name: 'Railway', color: '#0b0d0e'},
+        fly: {icon: '✈️', name: 'Fly.io', color: '#7b3ff2'}
+      };
+      
+      const COUNTRIES = {
+        FR: {icon: '🇫🇷', name: 'France'},
+        BE: {icon: '🇧🇪', name: 'Belgique'},
+        GB: {icon: '🇬🇧', name: 'UK'},
+        US: {icon: '🇺🇸', name: 'USA'},
+        DE: {icon: '🇩🇪', name: 'Allemagne'}
+      };
+      
       let html = `
         <table>
           <thead>
             <tr>
-              <th style="width: 50px;">✓</th>
+              <th class="checkbox-col">
+                <input type="checkbox" onclick="toggleAllOnPage()" id="selectAllPage">
+              </th>
               <th>Domain / IP</th>
               <th>Provider</th>
               <th>Pays</th>
@@ -643,15 +802,17 @@
       `;
       
       hosts.forEach(h => {
-        const providerInfo = PROVIDERS[h.provider] || {};
-        const countryInfo = COUNTRIES[h.country] || {};
+        const providerInfo = PROVIDERS[h.provider] || {icon: '❓', name: h.provider, color: '#888'};
+        const countryInfo = COUNTRIES[h.country] || {icon: '🌍', name: h.country};
+        const isSelected = selectedIds.has(h.id);
         
         html += `
-          <tr>
+          <tr class="${isSelected ? 'selected' : ''}">
             <td style="text-align: center;">
               <input type="checkbox" 
-                     ${h.selected ? 'checked' : ''} 
-                     onchange="toggleSelection(${h.id})">
+                     ${isSelected ? 'checked' : ''} 
+                     onchange="toggleSelection(${h.id})"
+                     data-id="${h.id}">
             </td>
             <td>
               <a href="http://${h.domain || h.ip}" target="_blank" class="domain-link">
@@ -696,25 +857,87 @@
       document.getElementById('tableContent').innerHTML = html;
     }
     
-    // ── Toggle selection ──────────────────────────────────────
-    async function toggleSelection(id) {
+    function toggleSelection(id) {
+      if (selectedIds.has(id)) {
+        selectedIds.delete(id);
+      } else {
+        selectedIds.add(id);
+      }
+      updateSelectionCount();
+      loadHosts(currentPage);
+    }
+    
+    function toggleAllOnPage() {
+      const checkbox = document.getElementById('selectAllPage');
+      const checkboxes = document.querySelectorAll('tbody input[type="checkbox"]');
+      
+      checkboxes.forEach(cb => {
+        const id = parseInt(cb.dataset.id);
+        if (checkbox.checked) {
+          selectedIds.add(id);
+        } else {
+          selectedIds.delete(id);
+        }
+      });
+      
+      updateSelectionCount();
+      loadHosts(currentPage);
+    }
+    
+    async function selectAllPages() {
+      if (!confirm('Voulez-vous sélectionner TOUS les résultats (toutes pages) ?')) {
+        return;
+      }
+      
       try {
-        await fetch(`/api/toggle/${id}`, { method: 'POST' });
-        loadStats();
+        const provider = document.getElementById('filterProvider').value;
+        const country = document.getElementById('filterCountry').value;
+        const params = new URLSearchParams({
+          provider, country, selected: 'false', page: 1, per_page: 10000
+        });
+        
+        const resp = await fetch(`/api/hosts?${params}`);
+        const data = await resp.json();
+        
+        data.hosts.forEach(h => selectedIds.add(h.id));
+        updateSelectionCount();
+        loadHosts(currentPage);
+        
       } catch (err) {
-        console.error('Erreur toggle:', err);
+        alert('Erreur lors de la sélection');
       }
     }
     
-    // ── Export CSV ────────────────────────────────────────────
-    async function exportCSV() {
-      window.location.href = '/api/export';
+    function deselectAll() {
+      selectedIds.clear();
+      updateSelectionCount();
+      loadHosts(currentPage);
     }
     
-    // ── Init ──────────────────────────────────────────────────
+    function updateSelectionCount() {
+      const count = selectedIds.size;
+      document.getElementById('statSelected').textContent = count.toLocaleString();
+      document.getElementById('selectionCount').textContent = count;
+      
+      const bar = document.getElementById('selectionBar');
+      bar.classList.toggle('active', count > 0);
+    }
+    
+    async function exportSelected() {
+      if (selectedIds.size === 0) {
+        alert('Aucune sélection à exporter');
+        return;
+      }
+      
+      const ids = Array.from(selectedIds).join(',');
+      window.location.href = `/api/export?ids=${ids}`;
+    }
+    
     loadHosts();
     loadStats();
-    setInterval(loadStats, 30000);
+    setInterval(() => {
+      if (!scanInterval) loadStats();
+    }, 30000);
   </script>
 </body>
 </html>
