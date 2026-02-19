@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Cloud Host Scanner - Certificate Transparency + Geolocation
-Récupère les certificats SSL des providers cloud puis géolocalise par pays
+Cloud Host Scanner - Shodan API Integration
+Utilise Shodan pour trouver les hébergements cloud par pays
 """
 
 import requests
@@ -9,48 +9,77 @@ import time
 import os
 import sys
 import json
-import socket
 from typing import Dict, List, Optional
 from dataclasses import dataclass
-import concurrent.futures
-from urllib.parse import urlparse
 
 # ── Configuration ──────────────────────────────────────────────
 API_ENDPOINT = os.getenv("API_ENDPOINT", "http://localhost:5000")
 API_KEY = os.getenv("API_KEY", "")
-IPINFO_TOKEN = os.getenv("IPINFO_TOKEN", "")
+SHODAN_API_KEY = os.getenv("SHODAN_API_KEY", "")
 SCAN_COUNTRY = os.getenv("SCAN_COUNTRY", "FR")
-TIMEOUT = 5
-MAX_WORKERS = 20
-BATCH_SIZE = 50
 
-# ── Domaines à scanner par provider ───────────────────────────
-PROVIDER_DOMAINS = {
-    "heroku": [".herokuapp.com"],
-    "aws": [".elasticbeanstalk.com", ".awsglobalaccelerator.com"],
-    "gcp": [".appspot.com", ".run.app"],
-    "azure": [".azurewebsites.net"],
-    "digitalocean": [".ondigitalocean.app"],
-    "netlify": [".netlify.app"],
-    "vercel": [".vercel.app"],
-    "render": [".onrender.com"],
-    "scalingo": [".scalingo.io"],
-    "railway": [".railway.app", ".up.railway.app"],
-    "fly": [".fly.dev"]
-}
-
-PROVIDERS_INFO = {
-    "heroku": {"name": "Heroku", "icon": "🟣"},
-    "aws": {"name": "Amazon AWS", "icon": "🟠"},
-    "gcp": {"name": "Google Cloud", "icon": "🔵"},
-    "azure": {"name": "Microsoft Azure", "icon": "🔷"},
-    "digitalocean": {"name": "DigitalOcean", "icon": "🟢"},
-    "netlify": {"name": "Netlify", "icon": "🟤"},
-    "vercel": {"name": "Vercel", "icon": "⚫"},
-    "render": {"name": "Render", "icon": "🟠"},
-    "scalingo": {"name": "Scalingo", "icon": "🇫🇷"},
-    "railway": {"name": "Railway", "icon": "🚂"},
-    "fly": {"name": "Fly.io", "icon": "✈️"}
+# ── Providers et leurs signatures Shodan ──────────────────────
+PROVIDERS = {
+    "heroku": {
+        "query": 'http.headers:"heroku-nel"',
+        "name": "Heroku",
+        "icon": "🟣"
+    },
+    "aws": {
+        "query": 'http.headers:"x-amz-" OR hostname:"amazonaws.com"',
+        "name": "Amazon AWS",
+        "icon": "🟠"
+    },
+    "gcp": {
+        "query": 'http.headers:"x-goog-" OR hostname:"appspot.com" OR hostname:"run.app"',
+        "name": "Google Cloud",
+        "icon": "🔵"
+    },
+    "azure": {
+        "query": 'http.headers:"x-azure-" OR hostname:"azurewebsites.net"',
+        "name": "Microsoft Azure",
+        "icon": "🔷"
+    },
+    "digitalocean": {
+        "query": 'hostname:"ondigitalocean.app" OR hostname:"digitaloceanspaces.com"',
+        "name": "DigitalOcean",
+        "icon": "🟢"
+    },
+    "cloudflare": {
+        "query": 'http.headers:"cf-ray"',
+        "name": "Cloudflare",
+        "icon": "🟡"
+    },
+    "netlify": {
+        "query": 'http.headers:"x-nf-" OR hostname:"netlify.app"',
+        "name": "Netlify",
+        "icon": "🟤"
+    },
+    "vercel": {
+        "query": 'http.headers:"x-vercel-" OR hostname:"vercel.app"',
+        "name": "Vercel",
+        "icon": "⚫"
+    },
+    "render": {
+        "query": 'hostname:"onrender.com"',
+        "name": "Render",
+        "icon": "🟠"
+    },
+    "scalingo": {
+        "query": 'http.headers:"x-scalingo-" OR hostname:"scalingo.io"',
+        "name": "Scalingo",
+        "icon": "🇫🇷"
+    },
+    "railway": {
+        "query": 'hostname:"railway.app"',
+        "name": "Railway",
+        "icon": "🚂"
+    },
+    "fly": {
+        "query": 'http.headers:"fly-request-id" OR hostname:"fly.dev"',
+        "name": "Fly.io",
+        "icon": "✈️"
+    }
 }
 
 @dataclass
@@ -60,110 +89,84 @@ class ScanResult:
     provider: str
     country: str
     status_code: int
+    port: int
 
 
-class CertScanner:
-    def __init__(self):
+class ShodanScanner:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.base_url = "https://api.shodan.io"
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (CloudScanner/2.0)'
-        })
-        self.ip_cache = {}
     
-    def get_certs_from_crtsh(self, pattern: str, limit: int = 1000) -> List[str]:
-        """Récupère les domaines depuis crt.sh."""
+    def search(self, query: str, country: str, page: int = 1) -> List[Dict]:
+        """Recherche Shodan avec filtre pays."""
+        full_query = f"{query} country:{country}"
+        
         try:
-            print(f"🔍 Recherche certificats pour: {pattern}")
+            print(f"🔍 Shodan: {full_query}")
+            
             resp = self.session.get(
-                "https://crt.sh/",
-                params={"q": pattern, "output": "json"},
+                f"{self.base_url}/shodan/host/search",
+                params={
+                    "key": self.api_key,
+                    "query": full_query,
+                    "page": page
+                },
                 timeout=30
             )
             
-            if resp.status_code != 200:
+            if resp.status_code == 401:
+                print("❌ Shodan API key invalide")
                 return []
             
-            certs = resp.json()
-            domains = set()
+            if resp.status_code == 403:
+                print("❌ Accès refusé - vérifiez votre plan Shodan")
+                return []
             
-            for cert in certs[:limit]:
-                name = cert.get("name_value", "")
-                # Nettoyer les wildcards et newlines
-                for domain in name.split("\n"):
-                    domain = domain.strip().replace("*.", "")
-                    if domain and "." in domain:
-                        domains.add(domain)
+            if resp.status_code != 200:
+                print(f"❌ Erreur Shodan: {resp.status_code}")
+                return []
             
-            print(f"✅ {len(domains)} domaines uniques trouvés")
-            return list(domains)[:limit]
+            data = resp.json()
+            results = data.get("matches", [])
+            total = data.get("total", 0)
+            
+            print(f"✅ {len(results)} résultats (total: {total})")
+            return results
             
         except Exception as e:
-            print(f"❌ Erreur crt.sh: {e}")
+            print(f"❌ Erreur: {e}")
             return []
     
-    def resolve_domain(self, domain: str) -> Optional[str]:
-        """Résout un domaine en IP."""
-        if domain in self.ip_cache:
-            return self.ip_cache[domain]
-        
+    def parse_result(self, result: Dict, provider: str, country: str) -> Optional[ScanResult]:
+        """Parse un résultat Shodan en ScanResult."""
         try:
-            ip = socket.gethostbyname(domain)
-            self.ip_cache[domain] = ip
-            return ip
-        except:
-            return None
-    
-    def geolocate_ip(self, ip: str) -> Optional[str]:
-        """Géolocalise une IP via ipinfo.io."""
-        try:
-            url = f"https://ipinfo.io/{ip}/json"
-            params = {"token": IPINFO_TOKEN} if IPINFO_TOKEN else {}
+            # Extraire le domaine (hostname ou IP)
+            hostnames = result.get("hostnames", [])
+            domain = hostnames[0] if hostnames else result.get("ip_str", "")
             
-            resp = self.session.get(url, params=params, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("country", "").upper()
-            return None
-        except:
-            return None
-    
-    def check_domain(self, domain: str, provider: str, target_country: str) -> Optional[ScanResult]:
-        """Vérifie si un domaine est actif et dans le bon pays."""
-        # Résoudre IP
-        ip = self.resolve_domain(domain)
-        if not ip:
-            return None
-        
-        # Géolocaliser
-        country = self.geolocate_ip(ip)
-        if not country or (target_country and country != target_country):
-            return None
-        
-        # Vérifier HTTP
-        try:
-            resp = self.session.get(
-                f"https://{domain}",
-                timeout=TIMEOUT,
-                allow_redirects=True,
-                verify=False
-            )
+            # Extraire les infos
+            ip = result.get("ip_str", "")
+            port = result.get("port", 443)
+            
+            # Status code depuis HTTP data
+            http_data = result.get("http", {})
+            status = http_data.get("status", 0)
+            
+            # Pays (double check)
+            result_country = result.get("location", {}).get("country_code", country)
             
             return ScanResult(
                 domain=domain,
                 ip=ip,
                 provider=provider,
-                country=country,
-                status_code=resp.status_code
+                country=result_country.upper(),
+                status_code=status,
+                port=port
             )
-        except:
-            # Même si HTTP échoue, on garde le domaine
-            return ScanResult(
-                domain=domain,
-                ip=ip,
-                provider=provider,
-                country=country,
-                status_code=0
-            )
+        except Exception as e:
+            print(f"⚠️ Erreur parsing: {e}")
+            return None
     
     def send_to_api(self, results: List[ScanResult]):
         """Envoie les résultats à l'API."""
@@ -192,68 +195,63 @@ class CertScanner:
         except Exception as e:
             print(f"❌ Erreur API: {e}")
     
-    def scan_provider(self, provider: str, patterns: List[str], target_country: str, max_per_pattern: int = 200):
+    def scan_provider(self, provider: str, config: Dict, country: str, max_pages: int = 5):
         """Scanne un provider complet."""
-        provider_info = PROVIDERS_INFO.get(provider, {})
-        icon = provider_info.get("icon", "❓")
-        name = provider_info.get("name", provider)
+        icon = config.get("icon", "❓")
+        name = config.get("name", provider)
+        query = config.get("query", "")
         
         print(f"\n{icon} {name}")
         print("-" * 60)
         
-        all_domains = []
+        all_results = []
         
-        # Récupérer les certificats pour chaque pattern
-        for pattern in patterns:
-            domains = self.get_certs_from_crtsh(f"%{pattern}", limit=max_per_pattern)
-            all_domains.extend(domains)
-        
-        # Dédupliquer
-        all_domains = list(set(all_domains))[:500]  # Max 500 par provider
-        
-        if not all_domains:
-            print("⚠️ Aucun domaine trouvé")
-            return
-        
-        print(f"📡 Vérification de {len(all_domains)} domaines...")
-        
-        # Scanner en parallèle
-        results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {
-                executor.submit(self.check_domain, domain, provider, target_country): domain
-                for domain in all_domains
-            }
+        # Paginer les résultats (100 par page)
+        for page in range(1, max_pages + 1):
+            results = self.search(query, country, page)
             
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result:
-                    results.append(result)
-                    print(f"  ✓ {result.domain} → {result.country} ({result.ip})")
+            if not results:
+                break
+            
+            # Parser les résultats
+            for r in results:
+                parsed = self.parse_result(r, provider, country)
+                if parsed:
+                    all_results.append(parsed)
+                    print(f"  ✓ {parsed.domain} → {parsed.country} ({parsed.ip})")
+            
+            # Envoyer par batch de 50
+            if len(all_results) >= 50:
+                self.send_to_api(all_results[:50])
+                all_results = all_results[50:]
+            
+            time.sleep(1)  # Rate limiting Shodan
         
-        # Envoyer par batches
-        for i in range(0, len(results), BATCH_SIZE):
-            batch = results[i:i+BATCH_SIZE]
-            self.send_to_api(batch)
-            time.sleep(0.5)
+        # Envoyer le reste
+        if all_results:
+            self.send_to_api(all_results)
         
-        print(f"📊 {len(results)} sites trouvés pour {name}")
+        print(f"📊 Total trouvé pour {name}")
 
 
 def main():
     """Point d'entrée principal."""
     country = SCAN_COUNTRY
     
-    print(f"🌍 Cloud Host Scanner - Certificate Transparency")
+    print(f"🌍 Cloud Host Scanner - Shodan API")
     print(f"🎯 Pays ciblé: {country}")
     print("=" * 60)
     
-    scanner = CertScanner()
-    total_found = 0
+    if not SHODAN_API_KEY:
+        print("❌ SHODAN_API_KEY manquant")
+        print("Ajoutez votre clé API Shodan dans les variables d'environnement")
+        sys.exit(1)
+    
+    scanner = ShodanScanner(SHODAN_API_KEY)
     
     # Scanner chaque provider
-    for provider, patterns in PROVIDER_DOMAINS.items():
-        found = scanner.scan_provider(provider, patterns, country, max_per_pattern=200)
+    for provider, config in PROVIDERS.items():
+        scanner.scan_provider(provider, config, country, max_pages=2)  # 200 résultats max par provider
         time.sleep(2)  # Rate limiting entre providers
     
     print("=" * 60)
@@ -261,8 +259,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # Désactiver les warnings SSL
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    
     main()
