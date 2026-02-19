@@ -14,32 +14,33 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         country: [FR, BE, CH, GB, DE, ES, IT, US, CA, BR, MX, JP, SG, IN, AU, ZA]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           pip install requests urllib3
-      
+
       - name: Run scanner
         env:
           API_ENDPOINT: ${{ secrets.API_ENDPOINT }}
           API_KEY: ${{ secrets.API_KEY }}
+          IPINFO_TOKEN: ${{ secrets.IPINFO_TOKEN }}
           SCAN_COUNTRY: ${{ matrix.country }}
         run: |
           python scanner.py
-      
+
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4

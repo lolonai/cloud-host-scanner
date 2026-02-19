@@ -117,25 +117,25 @@ class CloudScanner:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (CloudScanner/1.0)'
         })
-    
+
     def detect_provider(self, headers: Dict[str, str], domain: str = "") -> Optional[str]:
         """Détecte le provider cloud basé sur les headers et le domaine."""
         headers_lower = {k.lower(): v.lower() for k, v in headers.items()}
         headers_str = " ".join([f"{k}={v}" for k, v in headers_lower.items()])
-        
+
         for provider_key, provider_info in PROVIDERS.items():
             # Check headers
             for pattern in provider_info["headers"]:
                 if pattern.lower() in headers_str:
                     return provider_key
-            
+
             # Check domain
             for domain_pattern in provider_info["domains"]:
                 if domain_pattern.lower() in domain.lower():
                     return provider_key
-        
+
         return None
-    
+
     def scan_ip(self, ip: str, country: str) -> Optional[ScanResult]:
         """Scanne une IP et détecte le provider."""
         for protocol in ["http", "https"]:
@@ -147,12 +147,12 @@ class CloudScanner:
                     allow_redirects=True,
                     verify=False
                 )
-                
+
                 # Extraire le domaine final (après redirections)
                 final_domain = resp.url.split("//")[1].split("/")[0] if "//" in resp.url else ip
-                
+
                 provider = self.detect_provider(dict(resp.headers), final_domain)
-                
+
                 if provider:
                     return ScanResult(
                         ip=ip,
@@ -164,14 +164,14 @@ class CloudScanner:
                     )
             except:
                 continue
-        
+
         return None
-    
+
     def send_to_api(self, results: List[ScanResult]):
         """Envoie les résultats à l'API."""
         if not results:
             return
-        
+
         data = [
             {
                 "ip": r.ip,
@@ -183,7 +183,7 @@ class CloudScanner:
             }
             for r in results
         ]
-        
+
         try:
             resp = requests.post(
                 f"{API_ENDPOINT}/api/results",
@@ -193,14 +193,14 @@ class CloudScanner:
             print(f"✅ Envoyé {len(results)} résultats à l'API (status: {resp.status_code})")
         except Exception as e:
             print(f"❌ Erreur envoi API: {e}")
-    
+
     def scan_batch(self, ips: List[str], country: str):
         """Scanne un batch d'IPs en parallèle."""
         results = []
-        
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {executor.submit(self.scan_ip, ip, country): ip for ip in ips}
-            
+
             for future in concurrent.futures.as_completed(futures):
                 try:
                     result = future.result()
@@ -212,10 +212,10 @@ class CloudScanner:
                         print(f"{icon} {name} | {result.domain} ({result.ip}) | {country}")
                 except Exception as e:
                     pass
-        
+
         if results:
             self.send_to_api(results)
-        
+
         return len(results)
 
 
@@ -226,7 +226,7 @@ def get_ip_ranges_for_country(country_code: str) -> List[str]:
     """
     # Pour le MVP, on génère des IPs de test
     # TODO: Intégrer vraie API RIPE/ipinfo.io
-    
+
     # Ranges de test (à remplacer par vraie data)
     test_ranges = {
         "FR": ["51.15.", "163.172.", "195.154."],  # OVH, Scaleway
@@ -234,41 +234,41 @@ def get_ip_ranges_for_country(country_code: str) -> List[str]:
         "US": ["54.144.", "52.2."],  # AWS
         "GB": ["51.105.", "20.50."],  # Azure UK
     }
-    
+
     base_ranges = test_ranges.get(country_code, ["8.8.8."])
-    
+
     # Générer des IPs de test
     ips = []
     for base in base_ranges[:1]:  # Limiter pour le test
         for i in range(1, 255, 10):  # Échantillon
             ips.append(f"{base}{i}")
-    
+
     return ips
 
 
 def main():
     """Point d'entrée principal du scanner."""
     country = os.getenv("SCAN_COUNTRY", "FR")
-    
+
     print(f"🌍 Cloud Host Scanner - Pays: {country}")
     print(f"🎯 Détection: {len(PROVIDERS)} providers")
     print("=" * 60)
-    
+
     scanner = CloudScanner()
     ips = get_ip_ranges_for_country(country)
-    
+
     print(f"📡 {len(ips)} IPs à scanner...")
-    
+
     # Scanner par batches
     total_found = 0
     for i in range(0, len(ips), BATCH_SIZE):
         batch = ips[i:i+BATCH_SIZE]
         found = scanner.scan_batch(batch, country)
         total_found += found
-        
+
         print(f"📊 Batch {i//BATCH_SIZE + 1}: {found} trouvés (total: {total_found})")
         time.sleep(1)  # Rate limiting
-    
+
     print("=" * 60)
     print(f"✅ Scan terminé: {total_found} sites détectés")
 
