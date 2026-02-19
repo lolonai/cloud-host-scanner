@@ -1,301 +1,268 @@
 #!/usr/bin/env python3
 """
-Cloud Host Scanner - Multi-Provider Detection
-Scanne les IPs par pays et détecte l'hébergeur (Heroku, AWS, GCP, Azure, etc.)
+Cloud Host Scanner - Certificate Transparency + Geolocation
+Récupère les certificats SSL des providers cloud puis géolocalise par pays
 """
 
 import requests
 import time
 import os
 import sys
+import json
+import socket
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 import concurrent.futures
+from urllib.parse import urlparse
 
 # ── Configuration ──────────────────────────────────────────────
 API_ENDPOINT = os.getenv("API_ENDPOINT", "http://localhost:5000")
 API_KEY = os.getenv("API_KEY", "")
-TIMEOUT = 3  # secondes
-MAX_WORKERS = 50  # threads parallèles
-BATCH_SIZE = 100
+IPINFO_TOKEN = os.getenv("IPINFO_TOKEN", "")
+SCAN_COUNTRY = os.getenv("SCAN_COUNTRY", "FR")
+TIMEOUT = 5
+MAX_WORKERS = 20
+BATCH_SIZE = 50
 
-# ── Providers détectables ─────────────────────────────────────
-PROVIDERS = {
-    "heroku": {
-        "headers": ["via=vegur", "server=cowboy"],
-        "domains": [".herokuapp.com"],
-        "name": "Heroku",
-        "icon": "🟣"
-    },
-    "aws": {
-        "headers": ["server=amazons3", "x-amz-", "server=awselb"],
-        "domains": [".amazonaws.com", ".elasticbeanstalk.com", ".awsglobalaccelerator.com"],
-        "name": "Amazon AWS",
-        "icon": "🟠"
-    },
-    "gcp": {
-        "headers": ["server=google frontend", "x-goog-", "server=gws"],
-        "domains": [".appspot.com", ".run.app", ".cloudfunctions.net"],
-        "name": "Google Cloud",
-        "icon": "🔵"
-    },
-    "azure": {
-        "headers": ["server=microsoft-iis", "x-azure-", "server=microsoft-httpapi"],
-        "domains": [".azurewebsites.net", ".azure.com", ".cloudapp.azure.com"],
-        "name": "Microsoft Azure",
-        "icon": "🔷"
-    },
-    "digitalocean": {
-        "headers": ["server=nginx/droplet"],
-        "domains": [".digitaloceanspaces.com", ".ondigitalocean.app"],
-        "name": "DigitalOcean",
-        "icon": "🟢"
-    },
-    "cloudflare": {
-        "headers": ["server=cloudflare", "cf-ray"],
-        "domains": [".pages.dev", ".workers.dev"],
-        "name": "Cloudflare",
-        "icon": "🟡"
-    },
-    "ovh": {
-        "headers": ["server=apache (ovh)", "x-ovh-"],
-        "domains": [".ovh.net"],
-        "name": "OVH",
-        "icon": "🔴"
-    },
-    "netlify": {
-        "headers": ["server=netlify", "x-nf-"],
-        "domains": [".netlify.app", ".netlify.com"],
-        "name": "Netlify",
-        "icon": "🟤"
-    },
-    "vercel": {
-        "headers": ["server=vercel", "x-vercel-"],
-        "domains": [".vercel.app", ".vercel.sh"],
-        "name": "Vercel",
-        "icon": "⚫"
-    },
-    "render": {
-        "headers": ["x-render-"],
-        "domains": [".onrender.com"],
-        "name": "Render",
-        "icon": "🟠"
-    },
-    "scalingo": {
-        "headers": ["x-scalingo-"],
-        "domains": [".scalingo.io", ".osc-fr1.scalingo.io"],
-        "name": "Scalingo",
-        "icon": "🇫🇷"
-    },
-    "railway": {
-        "headers": [],
-        "domains": [".railway.app", ".up.railway.app"],
-        "name": "Railway",
-        "icon": "🚂"
-    },
-    "fly": {
-        "headers": ["via=fly.io", "fly-request-id"],
-        "domains": [".fly.dev"],
-        "name": "Fly.io",
-        "icon": "✈️"
-    }
+# ── Domaines à scanner par provider ───────────────────────────
+PROVIDER_DOMAINS = {
+    "heroku": [".herokuapp.com"],
+    "aws": [".elasticbeanstalk.com", ".awsglobalaccelerator.com"],
+    "gcp": [".appspot.com", ".run.app"],
+    "azure": [".azurewebsites.net"],
+    "digitalocean": [".ondigitalocean.app"],
+    "netlify": [".netlify.app"],
+    "vercel": [".vercel.app"],
+    "render": [".onrender.com"],
+    "scalingo": [".scalingo.io"],
+    "railway": [".railway.app", ".up.railway.app"],
+    "fly": [".fly.dev"]
+}
+
+PROVIDERS_INFO = {
+    "heroku": {"name": "Heroku", "icon": "🟣"},
+    "aws": {"name": "Amazon AWS", "icon": "🟠"},
+    "gcp": {"name": "Google Cloud", "icon": "🔵"},
+    "azure": {"name": "Microsoft Azure", "icon": "🔷"},
+    "digitalocean": {"name": "DigitalOcean", "icon": "🟢"},
+    "netlify": {"name": "Netlify", "icon": "🟤"},
+    "vercel": {"name": "Vercel", "icon": "⚫"},
+    "render": {"name": "Render", "icon": "🟠"},
+    "scalingo": {"name": "Scalingo", "icon": "🇫🇷"},
+    "railway": {"name": "Railway", "icon": "🚂"},
+    "fly": {"name": "Fly.io", "icon": "✈️"}
 }
 
 @dataclass
 class ScanResult:
+    domain: str
     ip: str
-    domain: Optional[str]
     provider: str
     country: str
-    headers: Dict[str, str]
     status_code: int
 
 
-class CloudScanner:
+class CertScanner:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (CloudScanner/1.0)'
+            'User-Agent': 'Mozilla/5.0 (CloudScanner/2.0)'
         })
-
-    def detect_provider(self, headers: Dict[str, str], domain: str = "") -> Optional[str]:
-        """Détecte le provider cloud basé sur les headers et le domaine."""
-        headers_lower = {k.lower(): v.lower() for k, v in headers.items()}
-        headers_str = " ".join([f"{k}={v}" for k, v in headers_lower.items()])
-
-        for provider_key, provider_info in PROVIDERS.items():
-            # Check headers
-            for pattern in provider_info["headers"]:
-                if pattern.lower() in headers_str:
-                    return provider_key
-
-            # Check domain
-            for domain_pattern in provider_info["domains"]:
-                if domain_pattern.lower() in domain.lower():
-                    return provider_key
-
-        return None
-
-    def scan_ip(self, ip: str, country: str) -> Optional[ScanResult]:
-        """Scanne une IP et détecte le provider."""
-        for protocol in ["http", "https"]:
-            try:
-                url = f"{protocol}://{ip}"
-                resp = self.session.get(
-                    url,
-                    timeout=TIMEOUT,
-                    allow_redirects=True,
-                    verify=False
-                )
-
-                # Extraire le domaine final (après redirections)
-                final_domain = resp.url.split("//")[1].split("/")[0] if "//" in resp.url else ip
-
-                provider = self.detect_provider(dict(resp.headers), final_domain)
-
-                if provider:
-                    return ScanResult(
-                        ip=ip,
-                        domain=final_domain,
-                        provider=provider,
-                        country=country,
-                        headers=dict(resp.headers),
-                        status_code=resp.status_code
-                    )
-            except:
-                continue
-
-        return None
-
+        self.ip_cache = {}
+    
+    def get_certs_from_crtsh(self, pattern: str, limit: int = 1000) -> List[str]:
+        """Récupère les domaines depuis crt.sh."""
+        try:
+            print(f"🔍 Recherche certificats pour: {pattern}")
+            resp = self.session.get(
+                "https://crt.sh/",
+                params={"q": pattern, "output": "json"},
+                timeout=30
+            )
+            
+            if resp.status_code != 200:
+                return []
+            
+            certs = resp.json()
+            domains = set()
+            
+            for cert in certs[:limit]:
+                name = cert.get("name_value", "")
+                # Nettoyer les wildcards et newlines
+                for domain in name.split("\n"):
+                    domain = domain.strip().replace("*.", "")
+                    if domain and "." in domain:
+                        domains.add(domain)
+            
+            print(f"✅ {len(domains)} domaines uniques trouvés")
+            return list(domains)[:limit]
+            
+        except Exception as e:
+            print(f"❌ Erreur crt.sh: {e}")
+            return []
+    
+    def resolve_domain(self, domain: str) -> Optional[str]:
+        """Résout un domaine en IP."""
+        if domain in self.ip_cache:
+            return self.ip_cache[domain]
+        
+        try:
+            ip = socket.gethostbyname(domain)
+            self.ip_cache[domain] = ip
+            return ip
+        except:
+            return None
+    
+    def geolocate_ip(self, ip: str) -> Optional[str]:
+        """Géolocalise une IP via ipinfo.io."""
+        try:
+            url = f"https://ipinfo.io/{ip}/json"
+            params = {"token": IPINFO_TOKEN} if IPINFO_TOKEN else {}
+            
+            resp = self.session.get(url, params=params, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("country", "").upper()
+            return None
+        except:
+            return None
+    
+    def check_domain(self, domain: str, provider: str, target_country: str) -> Optional[ScanResult]:
+        """Vérifie si un domaine est actif et dans le bon pays."""
+        # Résoudre IP
+        ip = self.resolve_domain(domain)
+        if not ip:
+            return None
+        
+        # Géolocaliser
+        country = self.geolocate_ip(ip)
+        if not country or (target_country and country != target_country):
+            return None
+        
+        # Vérifier HTTP
+        try:
+            resp = self.session.get(
+                f"https://{domain}",
+                timeout=TIMEOUT,
+                allow_redirects=True,
+                verify=False
+            )
+            
+            return ScanResult(
+                domain=domain,
+                ip=ip,
+                provider=provider,
+                country=country,
+                status_code=resp.status_code
+            )
+        except:
+            # Même si HTTP échoue, on garde le domaine
+            return ScanResult(
+                domain=domain,
+                ip=ip,
+                provider=provider,
+                country=country,
+                status_code=0
+            )
+    
     def send_to_api(self, results: List[ScanResult]):
         """Envoie les résultats à l'API."""
         if not results:
             return
-
+        
         data = [
             {
                 "ip": r.ip,
                 "domain": r.domain,
                 "provider": r.provider,
                 "country": r.country,
-                "headers": r.headers,
+                "headers": {},
                 "status_code": r.status_code
             }
             for r in results
         ]
-
+        
         try:
             resp = requests.post(
                 f"{API_ENDPOINT}/api/results",
                 json={"results": data, "api_key": API_KEY},
                 timeout=10
             )
-            print(f"✅ Envoyé {len(results)} résultats à l'API (status: {resp.status_code})")
+            print(f"✅ Envoyé {len(results)} résultats (status: {resp.status_code})")
         except Exception as e:
-            print(f"❌ Erreur envoi API: {e}")
-
-    def scan_batch(self, ips: List[str], country: str):
-        """Scanne un batch d'IPs en parallèle."""
+            print(f"❌ Erreur API: {e}")
+    
+    def scan_provider(self, provider: str, patterns: List[str], target_country: str, max_per_pattern: int = 200):
+        """Scanne un provider complet."""
+        provider_info = PROVIDERS_INFO.get(provider, {})
+        icon = provider_info.get("icon", "❓")
+        name = provider_info.get("name", provider)
+        
+        print(f"\n{icon} {name}")
+        print("-" * 60)
+        
+        all_domains = []
+        
+        # Récupérer les certificats pour chaque pattern
+        for pattern in patterns:
+            domains = self.get_certs_from_crtsh(f"%{pattern}", limit=max_per_pattern)
+            all_domains.extend(domains)
+        
+        # Dédupliquer
+        all_domains = list(set(all_domains))[:500]  # Max 500 par provider
+        
+        if not all_domains:
+            print("⚠️ Aucun domaine trouvé")
+            return
+        
+        print(f"📡 Vérification de {len(all_domains)} domaines...")
+        
+        # Scanner en parallèle
         results = []
-
         with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {executor.submit(self.scan_ip, ip, country): ip for ip in ips}
-
+            futures = {
+                executor.submit(self.check_domain, domain, provider, target_country): domain
+                for domain in all_domains
+            }
+            
             for future in concurrent.futures.as_completed(futures):
-                try:
-                    result = future.result()
-                    if result:
-                        results.append(result)
-                        provider_info = PROVIDERS.get(result.provider, {})
-                        icon = provider_info.get("icon", "❓")
-                        name = provider_info.get("name", result.provider)
-                        print(f"{icon} {name} | {result.domain} ({result.ip}) | {country}")
-                except Exception as e:
-                    pass
-
-        if results:
-            self.send_to_api(results)
-
-        return len(results)
-
-
-def get_ip_ranges_for_country(country_code: str) -> List[str]:
-    """Récupère les ranges d'IPs pour un pays via ipinfo.io."""
-    if not IPINFO_TOKEN:
-        print("❌ IPINFO_TOKEN manquant")
-        return []
-
-    try:
-        # Utiliser l'API ranges de ipinfo.io
-        resp = requests.get(
-            f"https://ipinfo.io/data/ranges/{country_code.lower()}.json",
-            params={"token": IPINFO_TOKEN},
-            timeout=10
-        )
-
-        if resp.status_code != 200:
-            print(f"❌ Erreur ipinfo.io: {resp.status_code} - {resp.text}")
-            return []
-
-        data = resp.json()
-
-        # Générer des IPs à partir des ranges
-        ips = []
-        for entry in data[:50]:  # Limiter à 50 premiers ranges
-            cidr = entry.get("range", "")
-            if not cidr:
-                continue
-
-            try:
-                network = ipaddress.ip_network(cidr, strict=False)
-                # Échantillonner 10 IPs par range
-                hosts = list(network.hosts())
-                if len(hosts) > 10:
-                    step = len(hosts) // 10
-                    sample = [str(hosts[i]) for i in range(0, len(hosts), step)][:10]
-                else:
-                    sample = [str(h) for h in hosts[:10]]
-                ips.extend(sample)
-
-                if len(ips) >= 500:
-                    break
-            except:
-                continue
-
-        print(f"📡 {len(ips)} IPs générées")
-        return ips[:500]
-
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
-        return []
+                result = future.result()
+                if result:
+                    results.append(result)
+                    print(f"  ✓ {result.domain} → {result.country} ({result.ip})")
+        
+        # Envoyer par batches
+        for i in range(0, len(results), BATCH_SIZE):
+            batch = results[i:i+BATCH_SIZE]
+            self.send_to_api(batch)
+            time.sleep(0.5)
+        
+        print(f"📊 {len(results)} sites trouvés pour {name}")
 
 
 def main():
-    """Point d'entrée principal du scanner."""
-    country = os.getenv("SCAN_COUNTRY", "FR")
-
-    print(f"🌍 Cloud Host Scanner - Pays: {country}")
-    print(f"🎯 Détection: {len(PROVIDERS)} providers")
+    """Point d'entrée principal."""
+    country = SCAN_COUNTRY
+    
+    print(f"🌍 Cloud Host Scanner - Certificate Transparency")
+    print(f"🎯 Pays ciblé: {country}")
     print("=" * 60)
-
-    scanner = CloudScanner()
-    ips = get_ip_ranges_for_country(country)
-
-    print(f"📡 {len(ips)} IPs à scanner...")
-
-    # Scanner par batches
+    
+    scanner = CertScanner()
     total_found = 0
-    for i in range(0, len(ips), BATCH_SIZE):
-        batch = ips[i:i+BATCH_SIZE]
-        found = scanner.scan_batch(batch, country)
-        total_found += found
-
-        print(f"📊 Batch {i//BATCH_SIZE + 1}: {found} trouvés (total: {total_found})")
-        time.sleep(1)  # Rate limiting
-
+    
+    # Scanner chaque provider
+    for provider, patterns in PROVIDER_DOMAINS.items():
+        found = scanner.scan_provider(provider, patterns, country, max_per_pattern=200)
+        time.sleep(2)  # Rate limiting entre providers
+    
     print("=" * 60)
-    print(f"✅ Scan terminé: {total_found} sites détectés")
+    print(f"✅ Scan terminé !")
 
 
 if __name__ == "__main__":
+    # Désactiver les warnings SSL
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
     main()
