@@ -68,7 +68,7 @@ def init_db():
     """Initialise la base de données."""
     conn = get_db()
     cur = conn.cursor()
-    
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS cloud_hosts (
             id SERIAL PRIMARY KEY,
@@ -83,13 +83,13 @@ def init_db():
             UNIQUE(ip, domain)
         )
     """)
-    
+
     # Index pour performances
     cur.execute("CREATE INDEX IF NOT EXISTS idx_provider ON cloud_hosts(provider)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_country ON cloud_hosts(country)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_selected ON cloud_hosts(selected)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_discovered ON cloud_hosts(discovered_at DESC)")
-    
+
     conn.commit()
     cur.close()
     conn.close()
@@ -100,7 +100,7 @@ def init_db():
 @app.route("/")
 def index():
     """Page principale."""
-    return render_template("index.html", 
+    return render_template("index.html",
                          providers=PROVIDERS_INFO,
                          countries=COUNTRIES)
 
@@ -109,16 +109,16 @@ def index():
 def add_results():
     """API pour ajouter des résultats de scan."""
     data = request.get_json()
-    
+
     # Vérif API key
     if data.get("api_key") != API_KEY:
         return jsonify({"error": "Invalid API key"}), 401
-    
+
     results = data.get("results", [])
-    
+
     conn = get_db()
     cur = conn.cursor()
-    
+
     added = 0
     for r in results:
         try:
@@ -137,11 +137,11 @@ def add_results():
             added += cur.rowcount
         except Exception as e:
             print(f"❌ Erreur insertion: {e}")
-    
+
     conn.commit()
     cur.close()
     conn.close()
-    
+
     return jsonify({"status": "ok", "added": added}), 200
 
 
@@ -153,35 +153,35 @@ def get_hosts():
     selected_only = request.args.get("selected") == "true"
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 100))
-    
+
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
+
     # Build query
     conditions = []
     params = []
-    
+
     if provider and provider != "all":
         conditions.append("provider = %s")
         params.append(provider)
-    
+
     if country and country != "all":
         conditions.append("country = %s")
         params.append(country)
-    
+
     if selected_only:
         conditions.append("selected = TRUE")
-    
+
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-    
+
     # Count total
     cur.execute(f"SELECT COUNT(*) as total FROM cloud_hosts {where_clause}", params)
     total = cur.fetchone()["total"]
-    
+
     # Fetch data
     offset = (page - 1) * per_page
     params.extend([per_page, offset])
-    
+
     cur.execute(f"""
         SELECT id, ip, domain, provider, country, status_code, selected, discovered_at
         FROM cloud_hosts
@@ -189,12 +189,12 @@ def get_hosts():
         ORDER BY discovered_at DESC
         LIMIT %s OFFSET %s
     """, params)
-    
+
     hosts = cur.fetchall()
-    
+
     cur.close()
     conn.close()
-    
+
     return jsonify({
         "hosts": hosts,
         "total": total,
@@ -208,7 +208,7 @@ def get_stats():
     """Statistiques globales."""
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
+
     # Total par provider
     cur.execute("""
         SELECT provider, COUNT(*) as count
@@ -217,7 +217,7 @@ def get_stats():
         ORDER BY count DESC
     """)
     by_provider = cur.fetchall()
-    
+
     # Total par pays
     cur.execute("""
         SELECT country, COUNT(*) as count
@@ -226,18 +226,18 @@ def get_stats():
         ORDER BY count DESC
     """)
     by_country = cur.fetchall()
-    
+
     # Total général
     cur.execute("SELECT COUNT(*) as total FROM cloud_hosts")
     total = cur.fetchone()["total"]
-    
+
     # Sélectionnés
     cur.execute("SELECT COUNT(*) as selected FROM cloud_hosts WHERE selected = TRUE")
     selected = cur.fetchone()["selected"]
-    
+
     cur.close()
     conn.close()
-    
+
     return jsonify({
         "total": total,
         "selected": selected,
@@ -251,19 +251,19 @@ def toggle_selection(host_id):
     """Toggle la sélection d'un host."""
     conn = get_db()
     cur = conn.cursor()
-    
+
     cur.execute("""
         UPDATE cloud_hosts
         SET selected = NOT selected
         WHERE id = %s
         RETURNING selected
     """, (host_id,))
-    
+
     result = cur.fetchone()
     conn.commit()
     cur.close()
     conn.close()
-    
+
     return jsonify({"selected": result[0] if result else False})
 
 
@@ -272,26 +272,23 @@ def trigger_scan():
     """Déclenche un scan en arrière-plan."""
     import subprocess
     import threading
-    
+
+    country = request.args.get("country", "FR")
+
     def run_scan():
-        """Lance le scanner en subprocess."""
         try:
             subprocess.run(
                 ["python3", "scanner.py"],
-                env={
-                    **os.environ,
-                    "SCAN_COUNTRY": request.args.get("country", "FR")
-                },
-                timeout=300  # 5 minutes max
+                env={**os.environ, "SCAN_COUNTRY": country},
+                timeout=300,
+                cwd="/home/bas/app_c023575d-72da-4748-b337-8d49f988e9cb"
             )
         except Exception as e:
             print(f"❌ Erreur scan: {e}")
-    
-    # Lancer en thread pour ne pas bloquer la requête
+
     thread = threading.Thread(target=run_scan, daemon=True)
     thread.start()
-    
-    return jsonify({"status": "started"}), 200
+    return jsonify({"status": "started", "country": country}), 200
 
 
 @app.route("/api/export")
@@ -299,25 +296,25 @@ def export_csv():
     """Exporte les hosts sélectionnés en CSV."""
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
+
     cur.execute("""
         SELECT domain, ip, provider, country, status_code, discovered_at
         FROM cloud_hosts
         WHERE selected = TRUE
         ORDER BY discovered_at DESC
     """)
-    
+
     hosts = cur.fetchall()
     cur.close()
     conn.close()
-    
+
     # Créer CSV en mémoire
     output = io.StringIO()
     writer = csv.writer(output)
-    
+
     # Header
     writer.writerow(["Domain", "IP", "Provider", "Country", "Status", "Discovered"])
-    
+
     # Data
     for h in hosts:
         writer.writerow([
@@ -328,13 +325,13 @@ def export_csv():
             h["status_code"],
             h["discovered_at"].strftime("%Y-%m-%d %H:%M")
         ])
-    
+
     # Convertir en bytes
     output.seek(0)
     mem = io.BytesIO()
     mem.write(output.getvalue().encode('utf-8-sig'))  # BOM pour Excel
     mem.seek(0)
-    
+
     return send_file(
         mem,
         mimetype='text/csv',
