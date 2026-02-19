@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Host Scanner - Multi-Provider Detection</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --bg: #0f1419;
+      --surface: #1a1f2e;
+      --border: #2d3748;
+      --text: #e2e8f0;
+      --muted: #a0aec0;
+      --accent: #667eea;
+      --success: #48bb78;
+      --warning: #ed8936;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    /* Header */
+    header {
+      background: var(--surface);
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      border: 1px solid var(--border);
+    }
+    
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    
+    .stat-card {
+      background: var(--surface);
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    
+    /* Filters */
+    .filters {
+      background: var(--surface);
+      padding: 25px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+    
+    .filter-row {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    
+    .filter-group {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .filter-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    
+    select, input[type="checkbox"] {
+      width: 100%;
+      padding: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+    }
+    
+    select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    
+    /* Buttons */
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+    
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    
+    .btn-success:hover {
+      background: #38a169;
+    }
+    
+    /* Table */
+    .table-container {
+      background: var(--surface);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .table-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    thead {
+      background: var(--bg);
+    }
+    
+    th {
+      padding: 15px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    
+    tbody tr:hover {
+      background: rgba(102, 126, 234, 0.05);
+    }
+    
+    td {
+      padding: 15px;
+      font-size: 14px;
+    }
+    
+    .provider-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .country-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+    
+    .checkbox-cell {
+      text-align: center;
+    }
+    
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+    
+    .domain-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .domain-link:hover {
+      text-decoration: underline;
+    }
+    
+    .ip-text {
+      color: var(--muted);
+      font-family: "Monaco", "Courier New", monospace;
+      font-size: 13px;
+    }
+    
+    /* Pagination */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      padding: 20px;
+      border-top: 1px solid var(--border);
+    }
+    
+    .pagination button {
+      padding: 8px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    
+    .pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .pagination .page-info {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+    
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>☁️ Cloud Host Scanner</h1>
+      <p class="subtitle">Détection multi-providers : Heroku, AWS, GCP, Azure, et plus...</p>
+    </header>
+    
+    <div class="stats" id="stats">
+      <div class="stat-card">
+        <div class="stat-value" id="statTotal">-</div>
+        <div class="stat-label">Hosts détectés</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statSelected">-</div>
+        <div class="stat-label">Sélectionnés</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statProviders">-</div>
+        <div class="stat-label">Providers</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statCountries">-</div>
+        <div class="stat-label">Pays</div>
+      </div>
+    </div>
+    
+    <div class="filters">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>Provider</label>
+          <select id="filterProvider" onchange="loadHosts()">
+            <option value="all">Tous les providers</option>
+            {% for key, info in providers.items() %}
+            <option value="{{ key }}">{{ info.icon }} {{ info.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label>Pays</label>
+          <select id="filterCountry" onchange="loadHosts()">
+            <option value="all">Tous les pays</option>
+            {% for code, info in countries.items() %}
+            <option value="{{ code }}">{{ info.icon }} {{ info.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label>Affichage</label>
+          <select id="filterSelected" onchange="loadHosts()">
+            <option value="false">Tous</option>
+            <option value="true">Sélectionnés uniquement</option>
+          </select>
+        </div>
+        
+        <div class="filter-group" style="flex: 0;">
+          <label>&nbsp;</label>
+          <button class="btn-success" onclick="exportCSV()" id="exportBtn">
+            📥 Exporter CSV
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="table-container">
+      <div class="table-header">
+        <div class="table-title">
+          <span id="tableTitle">Résultats</span>
+        </div>
+        <button class="btn-primary" onclick="loadHosts()">🔄 Actualiser</button>
+      </div>
+      
+      <div id="tableContent">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const PROVIDERS = {{ providers | tojson }};
+    const COUNTRIES = {{ countries | tojson }};
+    let currentPage = 1;
+    
+    // ── Load hosts ────────────────────────────────────────────
+    async function loadHosts(page = 1) {
+      const provider = document.getElementById('filterProvider').value;
+      const country = document.getElementById('filterCountry').value;
+      const selected = document.getElementById('filterSelected').value;
+      
+      const params = new URLSearchParams({
+        provider, country, selected, page, per_page: 50
+      });
+      
+      try {
+        const resp = await fetch(`/api/hosts?${params}`);
+        const data = await resp.json();
+        
+        currentPage = page;
+        renderTable(data);
+        
+      } catch (err) {
+        document.getElementById('tableContent').innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <p>Erreur de chargement</p>
+          </div>
+        `;
+      }
+    }
+    
+    // ── Load stats ────────────────────────────────────────────
+    async function loadStats() {
+      try {
+        const resp = await fetch('/api/stats');
+        const data = await resp.json();
+        
+        document.getElementById('statTotal').textContent = data.total.toLocaleString();
+        document.getElementById('statSelected').textContent = data.selected.toLocaleString();
+        document.getElementById('statProviders').textContent = data.by_provider.length;
+        document.getElementById('statCountries').textContent = data.by_country.length;
+        
+      } catch (err) {
+        console.error('Erreur stats:', err);
+      }
+    }
+    
+    // ── Render table ──────────────────────────────────────────
+    function renderTable(data) {
+      const { hosts, total, page, pages } = data;
+      
+      if (hosts.length === 0) {
+        document.getElementById('tableContent').innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <p>Aucun résultat trouvé</p>
+          </div>
+        `;
+        return;
+      }
+      
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">✓</th>
+              <th>Domain / IP</th>
+              <th>Provider</th>
+              <th>Pays</th>
+              <th>Status</th>
+              <th>Découvert</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      hosts.forEach(h => {
+        const providerInfo = PROVIDERS[h.provider] || {};
+        const countryInfo = COUNTRIES[h.country] || {};
+        
+        html += `
+          <tr>
+            <td class="checkbox-cell">
+              <input type="checkbox" 
+                     ${h.selected ? 'checked' : ''} 
+                     onchange="toggleSelection(${h.id})">
+            </td>
+            <td>
+              <a href="http://${h.domain || h.ip}" target="_blank" class="domain-link">
+                ${h.domain || h.ip}
+              </a>
+              ${h.domain ? `<br><span class="ip-text">${h.ip}</span>` : ''}
+            </td>
+            <td>
+              <span class="provider-badge" style="background: ${providerInfo.color}22; color: ${providerInfo.color}">
+                ${providerInfo.icon} ${providerInfo.name}
+              </span>
+            </td>
+            <td>
+              <span class="country-badge">
+                ${countryInfo.icon} ${countryInfo.name}
+              </span>
+            </td>
+            <td>${h.status_code || '-'}</td>
+            <td style="color: var(--muted); font-size: 13px;">
+              ${new Date(h.discovered_at).toLocaleString('fr-FR')}
+            </td>
+          </tr>
+        `;
+      });
+      
+      html += `
+          </tbody>
+        </table>
+        <div class="pagination">
+          <button onclick="loadHosts(${page - 1})" ${page === 1 ? 'disabled' : ''}>
+            ← Précédent
+          </button>
+          <span class="page-info">
+            Page ${page} / ${pages} (${total.toLocaleString()} résultats)
+          </span>
+          <button onclick="loadHosts(${page + 1})" ${page === pages ? 'disabled' : ''}>
+            Suivant →
+          </button>
+        </div>
+      `;
+      
+      document.getElementById('tableContent').innerHTML = html;
+    }
+    
+    // ── Toggle selection ──────────────────────────────────────
+    async function toggleSelection(id) {
+      try {
+        await fetch(`/api/toggle/${id}`, { method: 'POST' });
+        loadStats();
+      } catch (err) {
+        console.error('Erreur toggle:', err);
+      }
+    }
+    
+    // ── Export CSV ────────────────────────────────────────────
+    async function exportCSV() {
+      window.location.href = '/api/export';
+    }
+    
+    // ── Init ──────────────────────────────────────────────────
+    loadHosts();
+    loadStats();
+    setInterval(loadStats, 10000); // Refresh stats toutes les 10s
+  </script>
+</body>
+</html>
