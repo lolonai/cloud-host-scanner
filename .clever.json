@@ -1,0 +1,28 @@
+{
+  "apps": [
+    {
+      "app_id": "app_13bdf440-3afc-49a1-bc01-644db5d585d5",
+      "org_id": "orga_f0061ae7-7615-49cf-a47e-16f20c7c5248",
+      "deploy_url": "https://push-n3-par-clevercloud-customers.services.clever-cloud.com/app_13bdf440-3afc-49a1-bc01-644db5d585d5.git",
+      "git_ssh_url": "git+ssh://git@push-n3-par-clevercloud-customers.services.clever-cloud.com/app_13bdf440-3afc-49a1-bc01-644db5d585d5.git",
+      "name": "laurent-n8n",
+      "alias": "laurent-n8n"
+    },
+    {
+      "app_id": "app_eee1a60a-30e1-4069-a56c-20e7dcb0af3f",
+      "org_id": "orga_f0061ae7-7615-49cf-a47e-16f20c7c5248",
+      "deploy_url": "https://push-n3-par-clevercloud-customers.services.clever-cloud.com/app_eee1a60a-30e1-4069-a56c-20e7dcb0af3f.git",
+      "git_ssh_url": "git+ssh://git@push-n3-par-clevercloud-customers.services.clever-cloud.com/app_eee1a60a-30e1-4069-a56c-20e7dcb0af3f.git",
+      "name": "heroku-scanner",
+      "alias": "heroku-scanner"
+    },
+    {
+      "app_id": "app_c023575d-72da-4748-b337-8d49f988e9cb",
+      "org_id": "orga_f0061ae7-7615-49cf-a47e-16f20c7c5248",
+      "deploy_url": "https://push-n3-par-clevercloud-customers.services.clever-cloud.com/app_c023575d-72da-4748-b337-8d49f988e9cb.git",
+      "git_ssh_url": "git+ssh://git@push-n3-par-clevercloud-customers.services.clever-cloud.com/app_c023575d-72da-4748-b337-8d49f988e9cb.git",
+      "name": "cloud-scanner",
+      "alias": "cloud-scanner"
+    }
+  ]
+}
